@@ -27,7 +27,6 @@
 #include "plugin_apis/s390.c"
 #endif
 
-
 /**
  * SECTION: blockdev
  * @short_description: a library for doing low-level operations with block devices

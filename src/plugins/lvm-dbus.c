@@ -33,22 +33,23 @@
 GMutex global_config_lock;
 static gchar *global_config_str = NULL;
 
-#define LVM_BUS_NAME "com.redhat.lvm1"
-#define MANAGER_OBJ "/com/redhat/lvm1/Manager"
-#define MANAGER_INTF "com.redhat.lvm1.Manager"
-#define PV_OBJ_PREFIX "/com/redhat/lvm1/pv/"
-#define VG_OBJ_PREFIX "/com/redhat/lvm1/vg/"
-#define LV_OBJ_PREFIX "/com/redhat/lvm1/lv/"
-#define PV_OBJ_NODE "/com/redhat/lvm1/pv"
-#define VG_OBJ_NODE "/com/redhat/lvm1/vg"
-#define LV_OBJ_NODE "/com/redhat/lvm1/lv"
-#define PV_INTF LVM_BUS_NAME".pv"
-#define VG_INTF LVM_BUS_NAME".vg"
-#define LV_INTF LVM_BUS_NAME".lv"
+#define LVM_BUS_NAME "com.redhat.lvmdbus1"
+#define MANAGER_OBJ "/com/redhat/lvmdbus1/Manager"
+#define MANAGER_INTF "com.redhat.lvmdbus1.Manager"
+#define JOB_OBJ_PREFIX "/com/redhat/lvmdbus1/Job/"
+#define JOB_INTF "com.redhat.lvmdbus1.Job"
+#define PV_OBJ_PREFIX "/com/redhat/lvmdbus1/Pv/"
+#define VG_OBJ_PREFIX "/com/redhat/lvmdbus1/Vg/"
+#define LV_OBJ_PREFIX "/com/redhat/Lvmdbus1/Lv/"
+#define PV_INTF LVM_BUS_NAME".Pv"
+#define VG_INTF LVM_BUS_NAME".Vg"
+#define LV_INTF LVM_BUS_NAME".Lv"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
 #define DBUS_TOP_OBJ "/org/freedesktop/DBus"
 #define DBUS_PROPS_IFACE "org.freedesktop.DBus.Properties"
 #define DBUS_INTRO_IFACE "org.freedesktop.DBus.Introspectable"
+#define DBUS_LONG_CALL_TIMEOUT 10000 /* msecs */
+#define METHOD_CALL_TIMEOUT (DBUS_LONG_CALL_TIMEOUT / 2)
 
 static GDBusConnection *bus = NULL;
 
@@ -453,6 +454,64 @@ static BDLVMLVdata* get_lv_data_from_table (GHashTable *table, gboolean free_tab
 }
 /* =============================== REMOVE THIS =================================== */
 
+
+static gchar* get_object_path (gchar *obj_id, GError **error) {
+    GVariant *args = NULL;
+    GVariant *ret = NULL;
+    gchar *obj_path = NULL;
+
+    args = g_variant_new ("(s)", obj_id);
+    /* consumes (frees) the 'args' parameter */
+    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, MANAGER_OBJ, MANAGER_INTF,
+                                       "LookUpByLvmId", args, NULL, G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+    if (!ret)
+        /* error is already set */
+        return NULL;
+
+    g_variant_get (ret, "(o)", &obj_path);
+    g_variant_unref (ret);
+
+    return obj_path;
+}
+
+static GVariant* get_object_property (gchar *obj_path, gchar *iface, gchar *property, GError **error) {
+    GVariant *args = NULL;
+    GVariant *ret = NULL;
+    GVariant *real_ret = NULL;
+
+    args = g_variant_new ("(ss)", iface, property);
+
+    /* consumes (frees) the 'args' parameter */
+    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj_path, DBUS_PROPS_IFACE,
+                                       "Get", args, NULL, G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+    if (!ret) {
+        g_prefix_error (error, "Failed to get %s property of the %s object: ", property, obj_path);
+        return NULL;
+    }
+
+    g_variant_get (ret, "(v)", &real_ret);
+    g_variant_unref (ret);
+
+    return real_ret;
+}
+
+static GVariant* get_lvm_object_property (gchar *obj_id, gchar *iface, gchar *property, GError **error) {
+    gchar *obj_path = NULL;
+    GVariant *ret = NULL;
+
+    obj_path = get_object_path (obj_id, error);
+    if (!obj_path)
+        /* error is already set */
+        return NULL;
+    else {
+        ret = get_object_property (obj_path, iface, property, error);
+        g_free (obj_path);
+        return ret;
+    }
+}
+
 static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVariant *params, GVariant *extra_params, GError **error) {
     GVariant *config = NULL;
     GVariant *param = NULL;
@@ -460,6 +519,7 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
     GVariantBuilder builder;
     GVariantBuilder extra_builder;
     GVariant *config_extra_params = NULL;
+    GVariant *tmo = NULL;
     GVariant *all_params = NULL;
     GVariant *ret = NULL;
     gchar *params_str = NULL;
@@ -489,15 +549,22 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
         config_extra_params = g_variant_new_array (G_VARIANT_TYPE("{sv}"), NULL, 0);
 
     /* create new GVariant holding the given parameters with the global
-       config and extra_params merged together prepended */
+       config and extra_params merged together appended */
     g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
 
-    g_variant_builder_add_value (&builder, config_extra_params);
-
+    /* add parameters */
     g_variant_iter_init (&iter, params);
     while ((param = g_variant_iter_next_value (&iter))) {
         g_variant_builder_add_value (&builder, param);
     }
+
+    /* add the timeout spec */
+    tmo = g_variant_new ("i", METHOD_CALL_TIMEOUT);
+    g_variant_builder_add_value (&builder, tmo);
+
+    /* add extra parameters including config */
+    g_variant_builder_add_value (&builder, config_extra_params);
+
     all_params = g_variant_builder_end (&builder);
     g_variant_builder_clear (&builder);
 
@@ -506,7 +573,7 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
              method, obj, params_str);
     /* now do the call with all the parameters */
     ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj, intf, method, all_params,
-                                       NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, error);
+                                       NULL, G_DBUS_CALL_FLAGS_NONE, DBUS_LONG_CALL_TIMEOUT, NULL, error);
     g_debug ("Called");
 
     g_mutex_unlock (&global_config_lock);
@@ -519,132 +586,119 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
     return ret;
 }
 
-static gchar** get_existing_objects (gchar *obj_prefix, GError **error) {
-    GVariant *intro_v = NULL;
-    gchar *intro_data = NULL;
-    GDBusNodeInfo *info = NULL;
-    gchar **ret = NULL;
-    GDBusNodeInfo **nodes = NULL;
-    guint64 n_nodes = 0;
-    guint64 i = 0;
-
-    intro_v = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj_prefix, DBUS_INTRO_IFACE,
-                                           "Introspect", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
-                                           -1, NULL, error);
-
-    g_variant_get (intro_v, "(s)", &intro_data);
-    info = g_dbus_node_info_new_for_xml (intro_data, error);
-    g_free (intro_data);
-
-    if (!info->nodes)
-        /* no such objects */
-        return NULL;
-
-    for (nodes = info->nodes; (*nodes); nodes++)
-        n_nodes++;
-
-    ret = g_new0 (gchar*, n_nodes + 1);
-    for (nodes = info->nodes, i=0; (*nodes); nodes++, i++) {
-        ret[i] = g_strdup_printf ("%s/%s", obj_prefix, (*nodes)->path);
-    }
-    ret[i] = NULL;
-
-    g_dbus_node_info_unref (info);
-
-    return ret;
-}
-
-static GVariant* get_object_property (gchar *obj_path, gchar *iface, gchar *property, GError **error) {
-    GVariant *args = NULL;
+static gchar* call_lvm_method_sync (gchar *obj, gchar *intf, gchar *method, GVariant *params, GVariant *extra_params, GError **error) {
     GVariant *ret = NULL;
-    GVariant *real_ret = NULL;
+    gchar *obj_path = NULL;
+    gchar *task_path = NULL;
 
-    args = g_variant_new ("(ss)", iface, property);
-
-    /* consumes (frees) the 'args' parameter */
-    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj_path, DBUS_PROPS_IFACE,
-                                       "Get", args, NULL, G_DBUS_CALL_FLAGS_NONE,
-                                       -1, NULL, error);
+    ret = call_lvm_method (obj, intf, method, params, extra_params, error);
     if (!ret) {
-        g_prefix_error (error, "Failed to get %s property of the %s object: ", property, obj_path);
+        g_debug ((*error)->message);
         return NULL;
     }
-
-    g_variant_get (ret, "(v)", &real_ret);
-    g_variant_unref (ret);
-
-    return real_ret;
-}
-
-static gchar* find_object_by_name (gchar *obj_prefix, gchar *intf, gchar *name, GError **error) {
-    gchar **objects = NULL;
-    gchar **object = NULL;
-    GVariant *name_v = NULL;
-    const gchar *obj_name = NULL;
-    gchar *ret = NULL;
-
-    objects = get_existing_objects (obj_prefix, error);
-    if (!objects)
-        return NULL;
-
-    for (object=objects; *object && !ret; object++) {
-        name_v = get_object_property (*object, intf, "name", error);
-        obj_name = g_variant_get_string (name_v, NULL);
-        if (g_strcmp0 (name, obj_name) == 0)
-            ret = g_strdup (*object);
-        g_variant_unref (name_v);
-    }
-    g_strfreev (objects);
-
-    return ret;
-}
-
-static gchar* find_pv_by_device (gchar *device, GError **error) {
-    gchar *obj_path = find_object_by_name (PV_OBJ_NODE, PV_INTF, device, error);
-
-    if (!obj_path) {
-        if (*error == NULL) {
-            g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
-                         "The '%s' PV doesn't exist", device);
-            return NULL;
+    if (g_variant_check_format_string (ret, "((oo))", TRUE)) {
+        g_variant_get (ret, "((oo))", &obj_path, &task_path);
+        if (g_strcmp0 (obj_path, "/") != 0) {
+            g_debug ("Got path");
+            /* got a valid result, just return it */
+            g_variant_unref (ret);
+            g_free (task_path);
+            return obj_path;
+        } else {
+            g_debug ("Got task");
+            g_variant_unref (ret);
+            g_free (obj_path);
+        }
+    } else if (g_variant_check_format_string (ret, "(o)", TRUE)) {
+        g_variant_get (ret, "(o)", &task_path);
+        if (g_strcmp0 (task_path, "/") != 0) {
+            g_debug ("Got task");
+            g_variant_unref (ret);
         } else
-            /* error already set */
             return NULL;
+    } else {
+        g_variant_unref (ret);
+        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
+                     "Failed to parse the returned value!");
+        return NULL;
     }
 
-    return obj_path;
+    g_debug ("waiting for task %s", task_path);
+    ret = NULL;
+    while (!ret && !(*error)) {
+        ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, task_path, JOB_INTF, "Wait", g_variant_new ("(i)", -1),
+                                           NULL, G_DBUS_CALL_FLAGS_NONE, DBUS_LONG_CALL_TIMEOUT, NULL, error);
+        if (!ret && g_error_matches (*error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
+            /* let's wait longer */
+            g_clear_error (error);
+    }
+    if (ret) {
+        g_variant_unref (ret);
+        ret = get_object_property (task_path, JOB_INTF, "Result", error);
+        if (!ret) {
+            g_prefix_error (error, "Getting result after waiting for '%s' method of the '%s' object failed: ",
+                            method, obj);
+            g_free (task_path);
+            return NULL;
+        } else {
+            g_variant_get (ret, "s", &obj_path);
+            g_variant_unref (ret);
+
+            /* remove the job object and clean after ourselves */
+            ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, task_path, JOB_INTF, "Remove", NULL,
+                                               NULL, G_DBUS_CALL_FLAGS_NONE, DBUS_LONG_CALL_TIMEOUT, NULL, error);
+            if (ret)
+                g_variant_unref (ret);
+            if (*error)
+                g_clear_error (error);
+
+            g_free (task_path);
+            return obj_path;
+        }
+    } else
+        /* some real error */
+        g_prefix_error (error, "Waiting for '%s' method of the '%s' object to finish failed: ",
+                        method, obj);
+    g_free (task_path);
+    return NULL;
 }
+
 
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) __attribute__((unused));
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) {
-    gchar *obj_path = NULL;
     GVariant *ret = NULL;
 
-    obj_path = g_strdup_printf ("%s%s", VG_OBJ_PREFIX, vg_name);
-
-    ret = get_object_property (obj_path, VG_INTF, property, error);
-    g_free (obj_path);
+    ret = get_lvm_object_property (vg_name, VG_INTF, property, error);
 
     return ret;
 }
 
-static GVariant* get_lv_property (gchar *lv_name, gchar *property, GError **error) __attribute__((unused));
-static GVariant* get_lv_property (gchar *lv_name, gchar *property, GError **error) {
-    gchar *obj_path = NULL;
+static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *property, GError **error) __attribute__((unused));
+static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *property, GError **error) {
+    gchar *lv_spec = NULL;
     GVariant *ret = NULL;
 
-    obj_path = g_strdup_printf ("%s%s", LV_OBJ_PREFIX, lv_name);
+    lv_spec = g_strdup_printf ("%s/%s", vg_name, lv_name);
 
-    ret = get_object_property (obj_path, LV_INTF, property, error);
-    g_free (obj_path);
+    ret = get_lvm_object_property (lv_spec, LV_INTF, property, error);
+    g_free (lv_spec);
 
     return ret;
 }
 
-static GVariant* get_object_properties (gchar *obj_path, gchar *iface, GError **error) {
+static GVariant* get_lvm_object_properties (gchar *obj_id, gchar *iface, GError **error) {
     GVariant *args = NULL;
     GVariant *ret = NULL;
     GVariant *real_ret = NULL;
+    gchar *obj_path = NULL;
+
+    args = g_variant_new ("(s)", obj_id);
+    /* consumes (frees) the 'args' parameter */
+    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, MANAGER_OBJ, MANAGER_INTF,
+                                       "LookUpByLvmId", args, NULL, G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+    g_variant_get (ret, "(o)", &obj_path);
+    g_variant_unref (ret);
 
     args = g_variant_new ("(s)", iface);
 
@@ -665,39 +719,37 @@ static GVariant* get_object_properties (gchar *obj_path, gchar *iface, GError **
 
 static GVariant* get_pv_properties (gchar *pv_name, GError **error) __attribute__((unused));
 static GVariant* get_pv_properties (gchar *pv_name, GError **error) {
-    gchar *obj_path = NULL;
+    gchar *obj_id = NULL;
     GVariant *ret = NULL;
 
-    obj_path = g_strdup_printf ("%s%s", PV_OBJ_PREFIX, pv_name);
-
-    ret = get_object_properties (obj_path, PV_INTF, error);
-    g_free (obj_path);
+    if (!g_str_has_prefix (pv_name, "/dev/")) {
+        obj_id = g_strdup_printf ("/dev/%s", pv_name);
+        ret = get_lvm_object_properties (obj_id, PV_INTF, error);
+        g_free (obj_id);
+    } else
+        ret = get_lvm_object_properties (pv_name, PV_INTF, error);
 
     return ret;
 }
 
 static GVariant* get_vg_properties (gchar *vg_name, GError **error) __attribute__((unused));
 static GVariant* get_vg_properties (gchar *vg_name, GError **error) {
-    gchar *obj_path = NULL;
     GVariant *ret = NULL;
 
-    obj_path = g_strdup_printf ("%s%s", VG_OBJ_PREFIX, vg_name);
-
-    ret = get_object_properties (obj_path, VG_INTF, error);
-    g_free (obj_path);
+    ret = get_lvm_object_properties (vg_name, VG_INTF, error);
 
     return ret;
 }
 
-static GVariant* get_lv_properties (gchar *lv_name, GError **error) __attribute__((unused));
-static GVariant* get_lv_properties (gchar *lv_name, GError **error) {
-    gchar *obj_path = NULL;
+static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **error) __attribute__((unused));
+static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **error) {
+    gchar *lvm_spec = NULL;
     GVariant *ret = NULL;
 
-    obj_path = g_strdup_printf ("%s%s", LV_OBJ_PREFIX, lv_name);
+    lvm_spec = g_strdup_printf ("%s/%s", vg_name, lv_name);
 
-    ret = get_object_properties (obj_path, LV_INTF, error);
-    g_free (obj_path);
+    ret = get_lvm_object_properties (lvm_spec, LV_INTF, error);
+    g_free (lvm_spec);
 
     return ret;
 }
@@ -719,7 +771,7 @@ static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error __at
     g_variant_dict_lookup (&dict, "vg", "o", &value);
 
     g_variant_dict_clear (&dict);
-    vg_props = get_object_properties (value, VG_INTF, error);
+    vg_props = get_lvm_object_properties (value, VG_INTF, error);
     if (!vg_props)
         return data;
 
@@ -781,7 +833,7 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
 
     g_variant_dict_clear (&dict);
     /* XXX: only get the single property? */
-    vg_props = get_object_properties (value, VG_INTF, error);
+    vg_props = get_lvm_object_properties (value, VG_INTF, error);
     if (!vg_props)
         return data;
 
@@ -977,7 +1029,7 @@ gboolean bd_lvm_pvcreate (gchar *device, guint64 data_alignment, guint64 metadat
 
     params = g_variant_new ("(s)", device);
 
-    call_lvm_method (MANAGER_OBJ, MANAGER_INTF, "PvCreate", params, extra_params, error);
+    call_lvm_method_sync (MANAGER_OBJ, MANAGER_INTF, "PvCreate", params, extra_params, error);
     return ((*error) == NULL);
 }
 
@@ -995,12 +1047,12 @@ gboolean bd_lvm_pvcreate (gchar *device, guint64 data_alignment, guint64 metadat
  */
 gboolean bd_lvm_pvresize (gchar *device, guint64 size, GError **error) {
     GVariant *params = NULL;
-    gchar *obj_path = find_pv_by_device (device, error);
+    gchar *obj_path = get_object_path (device, error);
     if (!obj_path)
         return FALSE;
 
     params = g_variant_new ("(u)", size);
-    call_lvm_method (obj_path, PV_INTF, "ReSize", params, NULL, error);
+    call_lvm_method_sync (obj_path, PV_INTF, "ReSize", params, NULL, error);
 
     return (*error == NULL);
 }
