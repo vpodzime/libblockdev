@@ -552,10 +552,12 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
        config and extra_params merged together appended */
     g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
 
-    /* add parameters */
-    g_variant_iter_init (&iter, params);
-    while ((param = g_variant_iter_next_value (&iter))) {
-        g_variant_builder_add_value (&builder, param);
+    if (params) {
+        /* add parameters */
+        g_variant_iter_init (&iter, params);
+        while ((param = g_variant_iter_next_value (&iter))) {
+            g_variant_builder_add_value (&builder, param);
+        }
     }
 
     /* add the timeout spec */
@@ -1065,11 +1067,25 @@ gboolean bd_lvm_pvresize (gchar *device, guint64 size, GError **error) {
  * Returns: whether the PV was successfully removed/destroyed or not
  */
 gboolean bd_lvm_pvremove (gchar *device, GError **error) {
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+    gchar *obj_path = get_object_path (device, error);
+    if (!obj_path)
+        return FALSE;
+
     /* one has to be really persuasive to remove a PV (the double --force is not
        bug, at least not in this code) */
-    gchar *args[6] = {"pvremove", "--force", "--force", "--yes", device, NULL};
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+    g_variant_builder_add (&builder, "{sv}", "--force", g_variant_new ("s", ""));
+    g_variant_builder_add (&builder, "{sv}", "--force", g_variant_new ("s", ""));
+    g_variant_builder_add (&builder, "{sv}", "--yes", g_variant_new ("s", ""));
 
-    return call_lvm_and_report_error (args, error);
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
+    params = g_variant_new ("(v)", params);
+    call_lvm_method_sync (obj_path, PV_INTF, "Remove", NULL, params, error);
+
+    return (*error == NULL);
 }
 
 /**
