@@ -688,19 +688,10 @@ static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *propert
     return ret;
 }
 
-static GVariant* get_lvm_object_properties (gchar *obj_id, gchar *iface, GError **error) {
+static GVariant* get_object_properties (gchar *obj_path, gchar *iface, GError **error) {
     GVariant *args = NULL;
     GVariant *ret = NULL;
     GVariant *real_ret = NULL;
-    gchar *obj_path = NULL;
-
-    args = g_variant_new ("(s)", obj_id);
-    /* consumes (frees) the 'args' parameter */
-    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, MANAGER_OBJ, MANAGER_INTF,
-                                       "LookUpByLvmId", args, NULL, G_DBUS_CALL_FLAGS_NONE,
-                                       -1, NULL, error);
-    g_variant_get (ret, "(o)", &obj_path);
-    g_variant_unref (ret);
 
     args = g_variant_new ("(s)", iface);
 
@@ -719,7 +710,32 @@ static GVariant* get_lvm_object_properties (gchar *obj_id, gchar *iface, GError 
     return real_ret;
 }
 
-static GVariant* get_pv_properties (gchar *pv_name, GError **error) __attribute__((unused));
+static GVariant* get_lvm_object_properties (gchar *obj_id, gchar *iface, GError **error) {
+    GVariant *args = NULL;
+    GVariant *ret = NULL;
+    gchar *obj_path = NULL;
+
+    args = g_variant_new ("(s)", obj_id);
+    /* consumes (frees) the 'args' parameter */
+    ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, MANAGER_OBJ, MANAGER_INTF,
+                                       "LookUpByLvmId", args, NULL, G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+    g_variant_get (ret, "(o)", &obj_path);
+    g_variant_unref (ret);
+
+    if (g_strcmp0 (obj_path, "/") == 0) {
+        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
+                     "The object with LVM ID '%s' doesn't exist", obj_id);
+        g_free (obj_path);
+        return NULL;
+    }
+
+    ret = get_object_properties (obj_path, iface, error);
+    g_free (obj_path);
+    return ret;
+}
+
+
 static GVariant* get_pv_properties (gchar *pv_name, GError **error) {
     gchar *obj_id = NULL;
     GVariant *ret = NULL;
@@ -756,8 +772,7 @@ static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **err
     return ret;
 }
 
-static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error) __attribute__((unused));
-static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error __attribute__((unused))) {
+static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error) {
     BDLVMPVdata *data = g_new0 (BDLVMPVdata, 1);
     GVariantDict dict;
     gchar *value = NULL;
@@ -765,27 +780,27 @@ static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error __at
 
     g_variant_dict_init (&dict, props);
 
-    g_variant_dict_lookup (&dict, "name", "s", &(data->pv_name));
-    g_variant_dict_lookup (&dict, "uuid", "s", &(data->pv_uuid));
-    g_variant_dict_lookup (&dict, "pe_start", "t", &(data->pe_start));
+    g_variant_dict_lookup (&dict, "Name", "s", &(data->pv_name));
+    g_variant_dict_lookup (&dict, "Uuid", "s", &(data->pv_uuid));
+    g_variant_dict_lookup (&dict, "PeStart", "t", &(data->pe_start));
 
     /* returns an object path for the VG */
-    g_variant_dict_lookup (&dict, "vg", "o", &value);
+    g_variant_dict_lookup (&dict, "Vg", "s", &value);
 
+    vg_props = get_object_properties (value, VG_INTF, error);
     g_variant_dict_clear (&dict);
-    vg_props = get_lvm_object_properties (value, VG_INTF, error);
     if (!vg_props)
         return data;
 
     g_variant_dict_init (&dict, vg_props);
-    g_variant_dict_lookup (&dict, "name", "s", &(data->vg_name));
-    g_variant_dict_lookup (&dict, "uuid", "s", &(data->vg_uuid));
-    g_variant_dict_lookup (&dict, "size_bytes", "t", &(data->vg_size));
-    g_variant_dict_lookup (&dict, "free_bytes", "t", &(data->vg_free));
-    g_variant_dict_lookup (&dict, "extent_size_bytes", "t", &(data->vg_extent_size));
-    g_variant_dict_lookup (&dict, "extent_count", "t", &(data->vg_extent_count));
-    g_variant_dict_lookup (&dict, "free_count", "t", &(data->vg_free_count));
-    g_variant_dict_lookup (&dict, "pv_count", "t", &(data->vg_pv_count));
+    g_variant_dict_lookup (&dict, "Name", "s", &(data->vg_name));
+    g_variant_dict_lookup (&dict, "Uuid", "s", &(data->vg_uuid));
+    g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->vg_size));
+    g_variant_dict_lookup (&dict, "FreeBytes", "t", &(data->vg_free));
+    g_variant_dict_lookup (&dict, "ExtentSizeBytes", "t", &(data->vg_extent_size));
+    g_variant_dict_lookup (&dict, "ExtentCount", "t", &(data->vg_extent_count));
+    g_variant_dict_lookup (&dict, "FreeCount", "t", &(data->vg_free_count));
+    g_variant_dict_lookup (&dict, "PvCount", "t", &(data->vg_pv_count));
 
     g_variant_dict_clear (&dict);
     g_variant_unref (vg_props);
@@ -1140,41 +1155,18 @@ gboolean bd_lvm_pvscan (gchar *device, gboolean update_cache, GError **error) {
  * %NULL in case of error (the @error) gets populated in those cases)
  */
 BDLVMPVdata* bd_lvm_pvinfo (gchar *device, GError **error) {
-    gchar *args[10] = {"pvs", "--unit=b", "--nosuffix", "--nameprefixes",
-                       "--unquoted", "--noheadings",
-                       "-o", "pv_name,pv_uuid,pe_start,vg_name,vg_uuid,vg_size,vg_free," \
-                       "vg_extent_size,vg_extent_count,vg_free_count,pv_count",
-                       device, NULL};
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
+    GVariant *props = NULL;
+    BDLVMPVdata *ret = NULL;
 
-    success = call_lvm_and_capture_output (args, &output, error);
-    if (!success)
-        /* the error is already populated from the call */
+    props = get_pv_properties (device, error);
+    if (!props)
+        /* the error is already populated */
         return NULL;
 
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
+    ret = get_pv_data_from_props (props, error);
+    g_variant_unref (props);
 
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 11)) {
-            g_clear_error (error);
-            g_strfreev (lines);
-            return get_pv_data_from_table (table, TRUE);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    /* getting here means no usable info was found */
-    g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                 "Failed to parse information about the PV");
-    return NULL;
+    return ret;
 }
 
 /**
