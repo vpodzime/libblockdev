@@ -76,6 +76,7 @@ BDLVMPVdata* bd_lvm_pvdata_copy (BDLVMPVdata *data) {
 
     new_data->pv_name = g_strdup (data->pv_name);
     new_data->pv_uuid = g_strdup (data->pv_uuid);
+    new_data->pv_free = data->pv_free;
     new_data->pe_start = data->pe_start;
     new_data->vg_name = g_strdup (data->vg_name);
     new_data->vg_size = data->vg_size;
@@ -782,6 +783,7 @@ static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error) {
 
     g_variant_dict_lookup (&dict, "Name", "s", &(data->pv_name));
     g_variant_dict_lookup (&dict, "Uuid", "s", &(data->pv_uuid));
+    g_variant_dict_lookup (&dict, "FreeBytes", "t", &(data->pv_free));
     g_variant_dict_lookup (&dict, "PeStart", "t", &(data->pe_start));
 
     /* returns an object path for the VG */
