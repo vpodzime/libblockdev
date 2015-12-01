@@ -1299,9 +1299,9 @@ gboolean bd_lvm_vgremove (gchar *vg_name, GError **error) {
  * Returns: whether the VG was successfully activated or not
  */
 gboolean bd_lvm_vgactivate (gchar *vg_name, GError **error) {
-    gchar *args[4] = {"vgchange", "-ay", vg_name, NULL};
-
-    return call_lvm_and_report_error (args, error);
+    GVariant *params = g_variant_new ("(t)", 0);
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "Activate", params, NULL, error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -1312,9 +1312,9 @@ gboolean bd_lvm_vgactivate (gchar *vg_name, GError **error) {
  * Returns: whether the VG was successfully deactivated or not
  */
 gboolean bd_lvm_vgdeactivate (gchar *vg_name, GError **error) {
-    gchar *args[4] = {"vgchange", "-an", vg_name, NULL};
-
-    return call_lvm_and_report_error (args, error);
+    GVariant *params = g_variant_new ("(t)", 0);
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "Deactivate", params, NULL, error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -1326,9 +1326,21 @@ gboolean bd_lvm_vgdeactivate (gchar *vg_name, GError **error) {
  * Returns: whether the VG @vg_name was successfully extended with the given @device or not.
  */
 gboolean bd_lvm_vgextend (gchar *vg_name, gchar *device, GError **error) {
-    gchar *args[4] = {"vgextend", vg_name, device, NULL};
+    gchar *pv = NULL;
+    GVariant *pv_var = NULL;
+    GVariant *pvs = NULL;
+    GVariant *params = NULL;
 
-    return call_lvm_and_report_error (args, error);
+    pv = get_object_path (device, error);
+    if (!pv)
+        return FALSE;
+
+    pv_var = g_variant_new ("o", pv);
+    pvs = g_variant_new_array (NULL, &pv_var, 1);
+    params = g_variant_new_tuple (&pvs, 1);
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "Extend", params, NULL, error);
+    g_free (pv);
+    return ((*error) == NULL);
 }
 
 /**
@@ -1344,18 +1356,43 @@ gboolean bd_lvm_vgextend (gchar *vg_name, gchar *device, GError **error) {
  *       it from the VG. You must do that first by calling #bd_lvm_pvmove.
  */
 gboolean bd_lvm_vgreduce (gchar *vg_name, gchar *device, GError **error) {
-    gchar *args[5] = {"vgreduce", NULL, NULL, NULL, NULL};
+    gchar *pv = NULL;
+    GVariantBuilder builder;
+    GVariantType *type = NULL;
+    GVariant *pv_var = NULL;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
 
-    if (!device) {
-        args[1] = "--removemissing";
-        args[2] = "--force";
-        args[3] = vg_name;
+    pv = get_object_path (device, error);
+    if (!pv)
+        return FALSE;
+
+    pv_var = g_variant_new ("o", pv);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    if (device) {
+        /* do not remove missing */
+        g_variant_builder_add_value (&builder, g_variant_new_boolean (FALSE));
+        g_variant_builder_add_value (&builder, g_variant_new_array (NULL, &pv_var, 1));
+        params = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
     } else {
-        args[1] = vg_name;
-        args[2] = device;
+        /* remove missing */
+        g_variant_builder_add_value (&builder, g_variant_new_boolean (TRUE));
+        type = g_variant_type_new ("ao");
+        g_variant_builder_add_value (&builder, g_variant_new_array (type, NULL, 0));
+        g_variant_type_free (type);
+        params = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
+
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+        g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "--force", g_variant_new ("s", "")));
+        extra = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
     }
 
-    return call_lvm_and_report_error (args, error);
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "Reduce", params, extra, error);
+    g_free (pv);
+    return ((*error) == NULL);
 }
 
 /**
