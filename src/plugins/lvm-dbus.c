@@ -34,13 +34,14 @@ GMutex global_config_lock;
 static gchar *global_config_str = NULL;
 
 #define LVM_BUS_NAME "com.redhat.lvmdbus1"
+#define LVM_OBJ_PREFIX "/com/redhat/lvmdbus1"
 #define MANAGER_OBJ "/com/redhat/lvmdbus1/Manager"
 #define MANAGER_INTF "com.redhat.lvmdbus1.Manager"
 #define JOB_OBJ_PREFIX "/com/redhat/lvmdbus1/Job/"
 #define JOB_INTF "com.redhat.lvmdbus1.Job"
-#define PV_OBJ_PREFIX "/com/redhat/lvmdbus1/Pv/"
-#define VG_OBJ_PREFIX "/com/redhat/lvmdbus1/Vg/"
-#define LV_OBJ_PREFIX "/com/redhat/Lvmdbus1/Lv/"
+#define PV_OBJ_PREFIX LVM_OBJ_PREFIX"/Pv"
+#define VG_OBJ_PREFIX LVM_OBJ_PREFIX"/Vg"
+#define LV_OBJ_PREFIX LVM_OBJ_PREFIX"/Lv"
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_INTF LVM_BUS_NAME".Lv"
@@ -324,64 +325,6 @@ static GHashTable* parse_lvm_vars (gchar *str, guint *num_items) {
     return table;
 }
 
-static BDLVMPVdata* get_pv_data_from_table (GHashTable *table, gboolean free_table) {
-    BDLVMPVdata *data = g_new0 (BDLVMPVdata, 1);
-    gchar *value = NULL;
-
-    data->pv_name = g_strdup ((gchar*) g_hash_table_lookup (table, "LVM2_PV_NAME"));
-    data->pv_uuid = g_strdup ((gchar*) g_hash_table_lookup (table, "LVM2_PV_UUID"));
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_PE_START");
-    if (value)
-        data->pe_start = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->pe_start = 0;
-
-    data->vg_name = g_strdup ((gchar*) g_hash_table_lookup (table, "LVM2_VG_NAME"));
-    data->vg_uuid = g_strdup ((gchar*) g_hash_table_lookup (table, "LVM2_VG_UUID"));
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_SIZE");
-    if (value)
-        data->vg_size = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_size = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_FREE");
-    if (value)
-        data->vg_free = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_free = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_EXTENT_SIZE");
-    if (value)
-        data->vg_extent_size = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_extent_size = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_EXTENT_COUNT");
-    if (value)
-        data->vg_extent_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_extent_count = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_FREE_COUNT");
-    if (value)
-        data->vg_free_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_free_count = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_PV_COUNT");
-    if (value)
-        data->vg_pv_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->vg_pv_count = 0;
-
-    if (free_table)
-        g_hash_table_destroy (table);
-
-    return data;
-}
-
 static BDLVMVGdata* get_vg_data_from_table (GHashTable *table, gboolean free_table) {
     BDLVMVGdata *data = g_new0 (BDLVMVGdata, 1);
     gchar *value = NULL;
@@ -455,6 +398,36 @@ static BDLVMLVdata* get_lv_data_from_table (GHashTable *table, gboolean free_tab
 }
 /* =============================== REMOVE THIS =================================== */
 
+static gchar** get_existing_objects (gchar *obj_prefix, GError **error) {
+    GVariant *intro_v = NULL;
+    gchar *intro_data = NULL;
+    GDBusNodeInfo *info = NULL;
+    gchar **ret = NULL;
+    GDBusNodeInfo **nodes;
+    guint64 n_nodes = 0;
+    guint64 i = 0;
+
+    intro_v = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj_prefix, DBUS_INTRO_IFACE,
+                                           "Introspect", NULL, NULL, G_DBUS_CALL_FLAGS_NONE,
+                                           -1, NULL, error);
+
+    g_variant_get (intro_v, "(s)", &intro_data);
+    info = g_dbus_node_info_new_for_xml (intro_data, error);
+    g_free (intro_data);
+
+    for (nodes = info->nodes; (*nodes); nodes++)
+        n_nodes++;
+
+    ret = g_new0 (gchar*, n_nodes + 1);
+    for (nodes = info->nodes, i=0; (*nodes); nodes++, i++) {
+        ret[i] = g_strdup_printf ("%s/%s", obj_prefix, ((*nodes)->path));
+    }
+    ret[i] = NULL;
+
+    g_dbus_node_info_unref (info);
+
+    return ret;
+}
 
 static gchar* get_object_path (gchar *obj_id, GError **error) {
     GVariant *args = NULL;
@@ -788,6 +761,11 @@ static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error) {
 
     /* returns an object path for the VG */
     g_variant_dict_lookup (&dict, "Vg", "s", &value);
+    if (g_strcmp0 (value, "/") == 0) {
+        /* no VG, the PV is not part of any VG */
+        g_variant_dict_clear (&dict);
+        return data;
+    }
 
     vg_props = get_object_properties (value, VG_INTF, error);
     g_variant_dict_clear (&dict);
@@ -1136,16 +1114,34 @@ gboolean bd_lvm_pvmove (gchar *src, gchar *dest, GError **error) {
  * whole system is scanned for PVs.
  */
 gboolean bd_lvm_pvscan (gchar *device, gboolean update_cache, GError **error) {
-    gchar *args[4] = {"pvscan", NULL, NULL, NULL};
-    if (update_cache) {
-        args[1] = "--cache";
-        args[2] = device;
-    }
-    else
-        if (device)
-            g_warning ("Ignoring the device argument in pvscan (cache update not requested)");
+    GVariantBuilder builder;
+    GVariantType *type = NULL;
+    GVariant *params = NULL;
+    GVariant *device_var = NULL;
 
-    return call_lvm_and_report_error (args, error);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    /* activate LVs if updating the cache, update the cache and specify the
+       device (if any) */
+    g_variant_builder_add_value (&builder, g_variant_new_boolean (update_cache));
+    g_variant_builder_add_value (&builder, g_variant_new_boolean (update_cache));
+    if (update_cache && device) {
+        device_var = g_variant_new ("o", device);
+        g_variant_builder_add_value (&builder, g_variant_new_array (NULL, &device_var, 1));
+    } else {
+        type = g_variant_type_new ("ao");
+        g_variant_builder_add_value (&builder, g_variant_new_array (type, NULL, 0));
+        g_variant_type_free (type);
+    }
+    /* (major, minor)`s, we never specify them */
+    type = g_variant_type_new ("a(ii)");
+    g_variant_builder_add_value (&builder, g_variant_new_array (type, NULL, 0));
+    g_variant_type_free (type);
+
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
+
+    call_lvm_method_sync (MANAGER_OBJ, MANAGER_INTF, "PvScan", params, NULL, error);
+    return !(*error);
 }
 
 /**
@@ -1178,68 +1174,45 @@ BDLVMPVdata* bd_lvm_pvinfo (gchar *device, GError **error) {
  * Returns: (array zero-terminated=1): information about PVs found in the system
  */
 BDLVMPVdata** bd_lvm_pvs (GError **error) {
-    gchar *args[9] = {"pvs", "--unit=b", "--nosuffix", "--nameprefixes",
-                       "--unquoted", "--noheadings",
-                       "-o", "pv_name,pv_uuid,pe_start,vg_name,vg_uuid,vg_size,vg_free," \
-                       "vg_extent_size,vg_extent_count,vg_free_count,pv_count",
-                       NULL};
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
-    GPtrArray *pvs = g_ptr_array_new ();
-    BDLVMPVdata *pvdata = NULL;
+    gchar **objects = NULL;
+    guint64 n_pvs = 0;
+    GVariant *props = NULL;
     BDLVMPVdata **ret = NULL;
     guint64 i = 0;
 
-    success = call_lvm_and_capture_output (args, &output, error);
-
-    if (!success) {
-        if (g_error_matches (*error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_NOOUT)) {
-            /* no output => no VGs, not an error */
-            g_clear_error (error);
+    objects = get_existing_objects (PV_OBJ_PREFIX, error);
+    if (!objects) {
+        if (!(*error)) {
+            /* no PVs */
             ret = g_new0 (BDLVMPVdata*, 1);
             ret[0] = NULL;
             return ret;
-        }
-        else
-            /* the error is already populated from the call */
+        } else
+            /* error is already populated */
             return NULL;
     }
 
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
-
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 11)) {
-            /* valid line, try to parse and record it */
-            pvdata = get_pv_data_from_table (table, TRUE);
-            if (pvdata)
-                g_ptr_array_add (pvs, pvdata);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    g_strfreev (lines);
-
-    if (pvs->len == 0) {
-        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                     "Failed to parse information about PVs");
-        return NULL;
-    }
+    n_pvs = g_strv_length (objects);
 
     /* now create the return value -- NULL-terminated array of BDLVMPVdata */
-    ret = g_new0 (BDLVMPVdata*, pvs->len + 1);
-    for (i=0; i < pvs->len; i++)
-        ret[i] = (BDLVMPVdata*) g_ptr_array_index (pvs, i);
+    ret = g_new0 (BDLVMPVdata*, n_pvs + 1);
+    for (i=0; i < n_pvs; i++) {
+        props = get_object_properties (objects[i], PV_INTF, error);
+        if (!props) {
+            g_strfreev (objects);
+            g_free (ret);
+            return NULL;
+        }
+        ret[i] = get_pv_data_from_props (props, error);
+        if (!(ret[i])) {
+            g_strfreev (objects);
+            g_free (ret);
+            return NULL;
+        }
+    }
     ret[i] = NULL;
 
-    g_ptr_array_free (pvs, FALSE);
-
+    g_strfreev (objects);
     return ret;
 }
 
