@@ -446,6 +446,14 @@ static gchar* get_object_path (gchar *obj_id, GError **error) {
     g_variant_get (ret, "(o)", &obj_path);
     g_variant_unref (ret);
 
+    if (g_strcmp0 (obj_path, "/") == 0) {
+        /* not a valid path (at least for us) */
+        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
+                     "The object with LVM ID '%s' doesn't exist", obj_id);
+        g_free (obj_path);
+        return NULL;
+    }
+
     return obj_path;
 }
 
@@ -639,6 +647,17 @@ static gchar* call_lvm_method_sync (gchar *obj, gchar *intf, gchar *method, GVar
     return NULL;
 }
 
+static gchar* call_lvm_obj_method_sync (gchar *obj_id, gchar *intf, gchar *method, GVariant *params, GVariant *extra_params, GError **error) {
+    gchar *ret = NULL;
+    gchar *obj_path = get_object_path (obj_id, error);
+    if (!obj_path)
+        return FALSE;
+
+    ret = call_lvm_method_sync (obj_path, intf, method, params, extra_params, error);
+    g_free (obj_path);
+
+    return ret;
+}
 
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) __attribute__((unused));
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) {
@@ -1064,21 +1083,17 @@ gboolean bd_lvm_pvresize (gchar *device, guint64 size, GError **error) {
 gboolean bd_lvm_pvremove (gchar *device, GError **error) {
     GVariantBuilder builder;
     GVariant *params = NULL;
-    gchar *obj_path = get_object_path (device, error);
-    if (!obj_path)
-        return FALSE;
 
     /* one has to be really persuasive to remove a PV (the double --force is not
        bug, at least not in this code) */
     g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
-    g_variant_builder_add (&builder, "{sv}", "--force", g_variant_new ("s", ""));
-    g_variant_builder_add (&builder, "{sv}", "--force", g_variant_new ("s", ""));
+    g_variant_builder_add (&builder, "{sv}", "-ff", g_variant_new ("s", ""));
     g_variant_builder_add (&builder, "{sv}", "--yes", g_variant_new ("s", ""));
 
     params = g_variant_builder_end (&builder);
     g_variant_builder_clear (&builder);
     params = g_variant_new ("(v)", params);
-    call_lvm_method_sync (obj_path, PV_INTF, "Remove", NULL, params, error);
+    call_lvm_obj_method_sync (device, PV_INTF, "Remove", NULL, params, error);
 
     return (*error == NULL);
 }
@@ -1141,7 +1156,7 @@ gboolean bd_lvm_pvscan (gchar *device, gboolean update_cache, GError **error) {
     g_variant_builder_clear (&builder);
 
     call_lvm_method_sync (MANAGER_OBJ, MANAGER_INTF, "PvScan", params, NULL, error);
-    return !(*error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -1226,26 +1241,42 @@ BDLVMPVdata** bd_lvm_pvs (GError **error) {
  * Returns: whether the VG @name was successfully created or not
  */
 gboolean bd_lvm_vgcreate (gchar *name, gchar **pv_list, guint64 pe_size, GError **error) {
-    guint8 i = 0;
-    guint8 pv_list_len = pv_list ? g_strv_length (pv_list) : 0;
-    gchar **argv = g_new0 (gchar*, pv_list_len + 5);
-    pe_size = RESOLVE_PE_SIZE (pe_size);
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    gchar *path = NULL;
+    gchar **pv = NULL;
+    GVariant *pvs = NULL;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
 
-    argv[0] = "vgcreate";
-    argv[1] = "-s";
-    argv[2] = g_strdup_printf ("%"G_GUINT64_FORMAT"b", pe_size);
-    argv[3] = name;
-    for (i=4; i < (pv_list_len + 4); i++) {
-        argv[i] = pv_list[i-4];
+    /* build the array of PVs (object paths) */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_OBJECT_PATH_ARRAY);
+    for (pv = pv_list; *pv; pv++) {
+        path = get_object_path (*pv, error);
+        if (!path) {
+            g_variant_builder_clear (&builder);
+            return FALSE;
+        }
+        g_variant_builder_add_value (&builder, g_variant_new ("o", path));
     }
-    argv[i] = NULL;
+    pvs = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    success = call_lvm_and_report_error (argv, error);
-    g_free (argv[2]);
-    g_free (argv);
+    /* build the params tuple */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", name));
+    g_variant_builder_add_value (&builder, pvs);
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    return success;
+    /* pe_size needs to go to extra params */
+    pe_size = RESOLVE_PE_SIZE (pe_size);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+    g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "--physicalextentsize", create_size_str_param (pe_size, "b")));
+    extra = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
+
+    call_lvm_method_sync (MANAGER_OBJ, MANAGER_INTF, "VgCreate", params, extra, error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -1256,9 +1287,8 @@ gboolean bd_lvm_vgcreate (gchar *name, gchar **pv_list, guint64 pe_size, GError 
  * Returns: whether the VG was successfully removed or not
  */
 gboolean bd_lvm_vgremove (gchar *vg_name, GError **error) {
-    gchar *args[4] = {"vgremove", "--force", vg_name, NULL};
-
-    return call_lvm_and_report_error (args, error);
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "Remove", NULL, NULL, error);
+    return ((*error) == NULL);
 }
 
 /**
