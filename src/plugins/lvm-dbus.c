@@ -325,55 +325,6 @@ static GHashTable* parse_lvm_vars (gchar *str, guint *num_items) {
     return table;
 }
 
-static BDLVMVGdata* get_vg_data_from_table (GHashTable *table, gboolean free_table) {
-    BDLVMVGdata *data = g_new0 (BDLVMVGdata, 1);
-    gchar *value = NULL;
-
-    data->name = g_strdup (g_hash_table_lookup (table, "LVM2_VG_NAME"));
-    data->uuid = g_strdup (g_hash_table_lookup (table, "LVM2_VG_UUID"));
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_SIZE");
-    if (value)
-        data->size = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->size = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_FREE");
-    if (value)
-        data->free = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->free= 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_EXTENT_SIZE");
-    if (value)
-        data->extent_size = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->extent_size = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_EXTENT_COUNT");
-    if (value)
-        data->extent_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->extent_count = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_VG_FREE_COUNT");
-    if (value)
-        data->free_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->free_count = 0;
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_PV_COUNT");
-    if (value)
-        data->pv_count = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->pv_count = 0;
-
-    if (free_table)
-        g_hash_table_destroy (table);
-
-    return data;
-}
-
 static BDLVMLVdata* get_lv_data_from_table (GHashTable *table, gboolean free_table) {
     BDLVMLVdata *data = g_new0 (BDLVMLVdata, 1);
     gchar *value = NULL;
@@ -743,7 +694,6 @@ static GVariant* get_pv_properties (gchar *pv_name, GError **error) {
     return ret;
 }
 
-static GVariant* get_vg_properties (gchar *vg_name, GError **error) __attribute__((unused));
 static GVariant* get_vg_properties (gchar *vg_name, GError **error) {
     GVariant *ret = NULL;
 
@@ -807,22 +757,21 @@ static BDLVMPVdata* get_pv_data_from_props (GVariant *props, GError **error) {
     return data;
 }
 
-static BDLVMVGdata* get_vg_data_from_props (GVariant *props, GError **error) __attribute__((unused));
 static BDLVMVGdata* get_vg_data_from_props (GVariant *props, GError **error __attribute__((unused))) {
     BDLVMVGdata *data = g_new0 (BDLVMVGdata, 1);
     GVariantDict dict;
 
     g_variant_dict_init (&dict, props);
 
-    g_variant_dict_lookup (&dict, "name", "s", &(data->name));
-    g_variant_dict_lookup (&dict, "uuid", "s", &(data->uuid));
+    g_variant_dict_lookup (&dict, "Name", "s", &(data->name));
+    g_variant_dict_lookup (&dict, "Uuid", "s", &(data->uuid));
 
-    g_variant_dict_lookup (&dict, "size_bytes", "t", &(data->size));
-    g_variant_dict_lookup (&dict, "free_bytes", "t", &(data->free));
-    g_variant_dict_lookup (&dict, "extent_size_bytes", "t", &(data->extent_size));
-    g_variant_dict_lookup (&dict, "extent_count", "t", &(data->extent_count));
-    g_variant_dict_lookup (&dict, "free_count", "t", &(data->free_count));
-    g_variant_dict_lookup (&dict, "pv_count", "t", &(data->pv_count));
+    g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->size));
+    g_variant_dict_lookup (&dict, "FreeBytes", "t", &(data->free));
+    g_variant_dict_lookup (&dict, "ExtentSizeBytes", "t", &(data->extent_size));
+    g_variant_dict_lookup (&dict, "ExtentCount", "t", &(data->extent_count));
+    g_variant_dict_lookup (&dict, "FreeCount", "t", &(data->free_count));
+    g_variant_dict_lookup (&dict, "PvCount", "t", &(data->pv_count));
 
     g_variant_dict_clear (&dict);
 
@@ -1404,40 +1353,18 @@ gboolean bd_lvm_vgreduce (gchar *vg_name, gchar *device, GError **error) {
  * of error (the @error) gets populated in those cases)
  */
 BDLVMVGdata* bd_lvm_vginfo (gchar *vg_name, GError **error) {
-    gchar *args[10] = {"vgs", "--noheadings", "--nosuffix", "--nameprefixes",
-                       "--unquoted", "--units=b",
-                       "-o", "name,uuid,size,free,extent_size,extent_count,free_count,pv_count",
-                       vg_name, NULL};
+    GVariant *props = NULL;
+    BDLVMVGdata *ret = NULL;
 
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
-
-    success = call_lvm_and_capture_output (args, &output, error);
-    if (!success)
-        /* the error is already populated from the call */
+    props = get_vg_properties (vg_name, error);
+    if (!props)
+        /* the error is already populated */
         return NULL;
 
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
+    ret = get_vg_data_from_props (props, error);
+    g_variant_unref (props);
 
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 8)) {
-            g_strfreev (lines);
-            return get_vg_data_from_table (table, TRUE);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    /* getting here means no usable info was found */
-    g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                 "Failed to parse information about the VG");
-    return NULL;
+    return ret;
 }
 
 /**
@@ -1447,66 +1374,45 @@ BDLVMVGdata* bd_lvm_vginfo (gchar *vg_name, GError **error) {
  * Returns: (array zero-terminated=1): information about VGs found in the system
  */
 BDLVMVGdata** bd_lvm_vgs (GError **error) {
-    gchar *args[9] = {"vgs", "--noheadings", "--nosuffix", "--nameprefixes",
-                      "--unquoted", "--units=b",
-                      "-o", "name,uuid,size,free,extent_size,extent_count,free_count,pv_count",
-                      NULL};
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
-    GPtrArray *vgs = g_ptr_array_new ();
-    BDLVMVGdata *vgdata = NULL;
+    gchar **objects = NULL;
+    guint64 n_vgs = 0;
+    GVariant *props = NULL;
     BDLVMVGdata **ret = NULL;
     guint64 i = 0;
 
-    success = call_lvm_and_capture_output (args, &output, error);
-    if (!success) {
-        if (g_error_matches (*error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_NOOUT)) {
-            /* no output => no VGs, not an error */
-            g_clear_error (error);
+    objects = get_existing_objects (VG_OBJ_PREFIX, error);
+    if (!objects) {
+        if (!(*error)) {
+            /* no VGs */
             ret = g_new0 (BDLVMVGdata*, 1);
             ret[0] = NULL;
             return ret;
-        }
-        else
-            /* the error is already populated from the call */
+        } else
+            /* error is already populated */
             return NULL;
     }
 
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
-
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 8)) {
-            /* valid line, try to parse and record it */
-            vgdata = get_vg_data_from_table (table, TRUE);
-            if (vgdata)
-                g_ptr_array_add (vgs, vgdata);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    g_strfreev (lines);
-
-    if (vgs->len == 0) {
-        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                     "Failed to parse information about VGs");
-        return NULL;
-    }
+    n_vgs = g_strv_length (objects);
 
     /* now create the return value -- NULL-terminated array of BDLVMVGdata */
-    ret = g_new0 (BDLVMVGdata*, vgs->len + 1);
-    for (i=0; i < vgs->len; i++)
-        ret[i] = (BDLVMVGdata*) g_ptr_array_index (vgs, i);
+    ret = g_new0 (BDLVMVGdata*, n_vgs + 1);
+    for (i=0; i < n_vgs; i++) {
+        props = get_object_properties (objects[i], VG_INTF, error);
+        if (!props) {
+            g_strfreev (objects);
+            g_free (ret);
+            return NULL;
+        }
+        ret[i] = get_vg_data_from_props (props, error);
+        if (!(ret[i])) {
+            g_strfreev (objects);
+            g_free (ret);
+            return NULL;
+        }
+    }
     ret[i] = NULL;
 
-    g_ptr_array_free (vgs, FALSE);
-
+    g_strfreev (objects);
     return ret;
 }
 
