@@ -619,7 +619,6 @@ static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **erro
     return ret;
 }
 
-static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *property, GError **error) __attribute__((unused));
 static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *property, GError **error) {
     gchar *lv_spec = NULL;
     GVariant *ret = NULL;
@@ -1426,19 +1425,31 @@ BDLVMVGdata** bd_lvm_vgs (GError **error) {
  * %NULL if failed to determine (@error) is set in those cases)
  */
 gchar* bd_lvm_lvorigin (gchar *vg_name, gchar *lv_name, GError **error) {
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar *args[6] = {"lvs", "--noheadings", "-o", "origin", NULL, NULL};
-    args[4] = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    GVariant *prop = NULL;
+    gchar *obj_path = NULL;
+    gchar *ret = NULL;
 
-    success = call_lvm_and_capture_output (args, &output, error);
-    g_free (args[4]);
-
-    if (!success)
-        /* the error is already populated from the call */
+    prop = get_lv_property (vg_name, lv_name, "OriginLv", error);
+    if (!prop)
         return NULL;
+    g_variant_get (prop, "o", &obj_path);
+    g_variant_unref (prop);
 
-    return g_strstrip (output);
+    if (g_strcmp0 (obj_path, "/") == 0) {
+        /* no origin LV */
+        g_free (obj_path);
+        return NULL;
+    }
+    prop = get_object_property (obj_path, LV_INTF, "Name", error);
+    if (!prop) {
+        g_free (obj_path);
+        return NULL;
+    }
+
+    g_variant_get (prop, "s", &ret);
+    g_variant_unref (prop);
+
+    return ret;
 }
 
 /**
