@@ -493,9 +493,12 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
         }
     }
 
-    /* add the timeout spec */
-    tmo = g_variant_new ("i", METHOD_CALL_TIMEOUT);
-    g_variant_builder_add_value (&builder, tmo);
+    /* XXX: remove this hack */
+    if (g_strcmp0 (method, "Move") != 0) {
+        /* add the timeout spec */
+        tmo = g_variant_new ("i", METHOD_CALL_TIMEOUT);
+        g_variant_builder_add_value (&builder, tmo);
+    }
 
     /* add extra parameters including config */
     g_variant_builder_add_value (&builder, config_extra_params);
@@ -1058,11 +1061,58 @@ gboolean bd_lvm_pvremove (gchar *device, GError **error) {
  * PV (see pvmove(8)).
  */
 gboolean bd_lvm_pvmove (gchar *src, gchar *dest, GError **error) {
-    gchar *args[4] = {"pvmove", src, NULL, NULL};
-    if (dest)
-        args[2] = dest;
+    GVariant *prop = NULL;
+    gchar *src_path = NULL;
+    gchar *dest_path = NULL;
+    gchar *vg_obj_path = NULL;
+    GVariantBuilder builder;
+    GVariantType *type = NULL;
+    GVariant *dest_var = NULL;
+    GVariant *params = NULL;
 
-    return call_lvm_and_report_error (args, error);
+    src_path = get_object_path (src, error);
+    if (!src_path || (g_strcmp0 (src_path, "/") == 0)) {
+        if (!(*error))
+            g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
+                         "The source PV '%s' doesn't exist", src);
+        return FALSE;
+    }
+    if (dest) {
+        dest_path = get_object_path (dest, error);
+        if (!dest_path || (g_strcmp0 (dest_path, "/") == 0)) {
+            if (!(*error))
+                g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
+                             "The destination PV '%s' doesn't exist", dest);
+            return FALSE;
+        }
+    }
+    prop = get_object_property (src_path, PV_INTF, "Vg", error);
+    if (!prop) {
+        g_free (src_path);
+        return FALSE;
+    }
+    g_variant_get (prop, "s", &vg_obj_path);
+
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", src_path));
+    g_variant_builder_add_value (&builder, g_variant_new ("(tt)", 0, 0));
+    if (dest) {
+        dest_var = g_variant_new ("(ott)", dest_path, 0, 0);
+        g_variant_builder_add_value (&builder, g_variant_new_array (NULL, &dest_var, 1));
+    } else {
+        type = g_variant_type_new ("a(ott)");
+        g_variant_builder_add_value (&builder, g_variant_new_array (type, NULL, 0));
+        g_variant_type_free (type);
+    }
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
+
+    call_lvm_method_sync (vg_obj_path, VG_INTF, "Move", params, NULL, error);
+
+    g_free (src_path);
+    g_free (dest_path);
+    g_free (vg_obj_path);
+    return ((*error) == NULL);
 }
 
 /**
