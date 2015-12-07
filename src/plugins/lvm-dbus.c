@@ -613,6 +613,16 @@ static gchar* call_lvm_obj_method_sync (gchar *obj_id, gchar *intf, gchar *metho
     return ret;
 }
 
+static gchar* call_lv_method_sync (gchar *vg_name, gchar *lv_name, gchar *method, GVariant *params, GVariant *extra_params, GError **error) {
+    gchar *ret = NULL;
+    gchar *obj_id = g_strdup_printf ("%s/%s", vg_name, lv_name);
+
+    ret = call_lvm_obj_method_sync (obj_id, LV_INTF, method, params, extra_params, error);
+    g_free (obj_id);
+
+    return ret;
+}
+
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) __attribute__((unused));
 static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) {
     GVariant *ret = NULL;
@@ -704,7 +714,6 @@ static GVariant* get_vg_properties (gchar *vg_name, GError **error) {
     return ret;
 }
 
-static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **error) __attribute__((unused));
 static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **error) {
     gchar *lvm_spec = NULL;
     GVariant *ret = NULL;
@@ -780,35 +789,28 @@ static BDLVMVGdata* get_vg_data_from_props (GVariant *props, GError **error __at
     return data;
 }
 
-static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error) __attribute__((unused));
 static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __attribute__((unused))) {
     BDLVMLVdata *data = g_new0 (BDLVMLVdata, 1);
     GVariantDict dict;
     gchar *value = NULL;
-    GVariant *vg_props = NULL;
+    GVariant *vg_name = NULL;
 
     g_variant_dict_init (&dict, props);
 
-    g_variant_dict_lookup (&dict, "name", "s", &(data->lv_name));
-    g_variant_dict_lookup (&dict, "uuid", "s", &(data->uuid));
-    g_variant_dict_lookup (&dict, "size_bytes", "t", &(data->size));
-    g_variant_dict_lookup (&dict, "attr", "s", &(data->attr));
-    g_variant_dict_lookup (&dict, "segtype", "s", &(data->segtype));
+    g_variant_dict_lookup (&dict, "Name", "s", &(data->lv_name));
+    g_variant_dict_lookup (&dict, "Uuid", "s", &(data->uuid));
+    g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->size));
+    g_variant_dict_lookup (&dict, "Attr", "s", &(data->attr));
+    g_variant_dict_lookup (&dict, "SegType", "s", &(data->segtype));
 
     /* returns an object path for the VG */
-    g_variant_dict_lookup (&dict, "vg", "o", &value);
+    g_variant_dict_lookup (&dict, "Vg", "o", &value);
+
+    vg_name = get_object_property (value, VG_INTF, "Name", error);
+    g_variant_get (vg_name, "s", &(data->vg_name));
 
     g_variant_dict_clear (&dict);
-    /* XXX: only get the single property? */
-    vg_props = get_lvm_object_properties (value, VG_INTF, error);
-    if (!vg_props)
-        return data;
-
-    g_variant_dict_init (&dict, vg_props);
-    g_variant_dict_lookup (&dict, "name", "s", &(data->vg_name));
-
-    g_variant_dict_clear (&dict);
-    g_variant_unref (vg_props);
+    g_variant_unref (vg_name);
 
     return data;
 }
@@ -1555,22 +1557,21 @@ gboolean bd_lvm_lvcreate (gchar *vg_name, gchar *lv_name, guint64 size, gchar *t
  * Returns: whether the @vg_name/@lv_name LV was successfully removed or not
  */
 gboolean bd_lvm_lvremove (gchar *vg_name, gchar *lv_name, gboolean force, GError **error) {
-    gchar *args[5] = {"lvremove", NULL, NULL, NULL, NULL};
-    guint8 next_arg = 1;
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariant *extra = NULL;
 
     if (force) {
-        args[next_arg] = "--force";
-        next_arg++;
-        args[next_arg] = "--yes";
-        next_arg++;
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+        g_variant_builder_add (&builder, "{sv}", "--force", g_variant_new ("s", ""));
+        g_variant_builder_add (&builder, "{sv}", "--yes", g_variant_new ("s", ""));
+
+        extra = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
+        extra = g_variant_new ("(v)", extra);
     }
-    args[next_arg] = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    call_lv_method_sync (vg_name, lv_name, "Remove", NULL, extra, error);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[next_arg]);
-
-    return success;
+    return (*error == NULL);
 }
 
 /**
@@ -1654,17 +1655,18 @@ gboolean bd_lvm_lvdeactivate (gchar *vg_name, gchar *lv_name, GError **error) {
  * was successfully created or not.
  */
 gboolean bd_lvm_lvsnapshotcreate (gchar *vg_name, gchar *origin_name, gchar *snapshot_name, guint64 size, GError **error) {
-    gchar *args[8] = {"lvcreate", "-s", "-L", NULL, "-n", snapshot_name, NULL, NULL};
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
 
-    args[3] = g_strdup_printf ("%"G_GUINT64_FORMAT"b", size);
-    args[6] = g_strdup_printf ("%s/%s", vg_name, origin_name);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", snapshot_name));
+    g_variant_builder_add_value (&builder, g_variant_new ("t", size));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[3]);
-    g_free (args[6]);
+    call_lv_method_sync (vg_name, origin_name, "Snapshot", params, NULL, error);
 
-    return success;
+    return (*error == NULL);
 }
 
 /**
@@ -1697,44 +1699,18 @@ gboolean bd_lvm_lvsnapshotmerge (gchar *vg_name, gchar *snapshot_name, GError **
  * of error (the @error) gets populated in those cases)
  */
 BDLVMLVdata* bd_lvm_lvinfo (gchar *vg_name, gchar *lv_name, GError **error) {
-    gchar *args[11] = {"lvs", "--noheadings", "--nosuffix", "--nameprefixes",
-                       "--unquoted", "--units=b", "-a",
-                       "-o", "vg_name,lv_name,lv_uuid,lv_size,lv_attr,segtype",
-                       NULL, NULL};
+    GVariant *props = NULL;
+    BDLVMLVdata *ret = NULL;
 
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
-
-    args[9] = g_strdup_printf ("%s/%s", vg_name, lv_name);
-
-    success = call_lvm_and_capture_output (args, &output, error);
-    g_free (args[9]);
-
-    if (!success)
-        /* the error is already populated from the call */
+    props = get_lv_properties (vg_name, lv_name, error);
+    if (!props)
+        /* the error is already populated */
         return NULL;
 
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
+    ret = get_lv_data_from_props (props, error);
+    g_variant_unref (props);
 
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 6)) {
-            g_strfreev (lines);
-            return get_lv_data_from_table (table, TRUE);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    /* getting here means no usable info was found */
-    g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                 "Failed to parse information about the LV");
-    return NULL;
+    return ret;
 }
 
 /**
