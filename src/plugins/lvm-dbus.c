@@ -1804,37 +1804,35 @@ BDLVMLVdata** bd_lvm_lvs (gchar *vg_name, GError **error) {
  * Returns: whether the @vg_name/@lv_name thin pool was successfully created or not
  */
 gboolean bd_lvm_thpoolcreate (gchar *vg_name, gchar *lv_name, guint64 size, guint64 md_size, guint64 chunk_size, gchar *profile, GError **error) {
-    gchar *args[9] = {"lvcreate", "-T", "-L", NULL, NULL, NULL, NULL, NULL, NULL};
-    guint8 next_arg = 4;
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
+    GVariant *param = NULL;
 
-    args[3] = g_strdup_printf ("%"G_GUINT64_FORMAT"b", size);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", lv_name));
+    g_variant_builder_add_value (&builder, create_size_str_param (size, "b"));
+    g_variant_builder_add_value (&builder, g_variant_new_boolean (TRUE));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
     if (md_size != 0) {
-        args[next_arg] = g_strdup_printf("--poolmetadatasize=%"G_GUINT64_FORMAT"b", md_size);
-        next_arg++;
+        param = create_size_str_param (md_size, "b");
+        g_variant_builder_add (&builder, "{sv}", "poolmetadatasize", param);
     }
-
     if (chunk_size != 0) {
-        args[next_arg] = g_strdup_printf("--chunksize=%"G_GUINT64_FORMAT"b", chunk_size);
-        next_arg++;
+        param = create_size_str_param (chunk_size, "b");
+        g_variant_builder_add (&builder, "{sv}", "chunksize", param);
     }
-
     if (profile) {
-        args[next_arg] = g_strdup_printf("--profile=%s", profile);
-        next_arg++;
+        g_variant_builder_add (&builder, "{sv}", "profile", g_variant_new ("s", profile));
     }
+    extra = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    args[next_arg] = g_strdup_printf ("%s/%s", vg_name, lv_name);
-
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[3]);
-    g_free (args[4]);
-    g_free (args[5]);
-    g_free (args[6]);
-    g_free (args[7]);
-
-    return success;
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "LvCreateLinear", params, extra, error);
+    return ((*error) == NULL);
 }
 
 /**
