@@ -45,7 +45,7 @@ static gchar *global_config_str = NULL;
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_INTF LVM_BUS_NAME".Lv"
-#define THPOOL_INTF LVM_BUS_NAME".Thinpool"
+#define THPOOL_INTF LVM_BUS_NAME".ThinPool"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
 #define DBUS_TOP_OBJ "/org/freedesktop/DBus"
 #define DBUS_PROPS_IFACE "org.freedesktop.DBus.Properties"
@@ -508,8 +508,8 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
     g_variant_builder_clear (&builder);
 
     params_str = g_variant_print (all_params, FALSE);
-    g_debug ("Calling the '%s' method on the '%s' object with the following parameters: '%s'",
-             method, obj, params_str);
+    g_debug ("Calling the '%s.%s' method on the '%s' object with the following parameters: '%s'",
+             intf, method, obj, params_str);
     /* now do the call with all the parameters */
     ret = g_dbus_connection_call_sync (bus, LVM_BUS_NAME, obj, intf, method, all_params,
                                        NULL, G_DBUS_CALL_FLAGS_NONE, DBUS_LONG_CALL_TIMEOUT, NULL, error);
