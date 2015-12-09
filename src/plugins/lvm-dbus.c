@@ -45,6 +45,7 @@ static gchar *global_config_str = NULL;
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_INTF LVM_BUS_NAME".Lv"
+#define THPOOL_INTF LVM_BUS_NAME".Thinpool"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
 #define DBUS_TOP_OBJ "/org/freedesktop/DBus"
 #define DBUS_PROPS_IFACE "org.freedesktop.DBus.Properties"
@@ -618,6 +619,16 @@ static gchar* call_lv_method_sync (gchar *vg_name, gchar *lv_name, gchar *method
     gchar *obj_id = g_strdup_printf ("%s/%s", vg_name, lv_name);
 
     ret = call_lvm_obj_method_sync (obj_id, LV_INTF, method, params, extra_params, error);
+    g_free (obj_id);
+
+    return ret;
+}
+
+static gchar* call_thpool_method_sync (gchar *vg_name, gchar *pool_name, gchar *method, GVariant *params, GVariant *extra_params, GError **error) {
+    gchar *ret = NULL;
+    gchar *obj_id = g_strdup_printf ("%s/%s", vg_name, pool_name);
+
+    ret = call_lvm_obj_method_sync (obj_id, THPOOL_INTF, method, params, extra_params, error);
     g_free (obj_id);
 
     return ret;
@@ -1846,17 +1857,18 @@ gboolean bd_lvm_thpoolcreate (gchar *vg_name, gchar *lv_name, guint64 size, guin
  * Returns: whether the @vg_name/@lv_name thin LV was successfully created or not
  */
 gboolean bd_lvm_thlvcreate (gchar *vg_name, gchar *pool_name, gchar *lv_name, guint64 size, GError **error) {
-    gchar *args[8] = {"lvcreate", "-T", NULL, "-V", NULL, "-n", lv_name, NULL};
-    gboolean success;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
 
-    args[2] = g_strdup_printf ("%s/%s", vg_name, pool_name);
-    args[4] = g_strdup_printf ("%"G_GUINT64_FORMAT"b", size);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", lv_name));
+    g_variant_builder_add_value (&builder, g_variant_new ("t", size));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[2]);
-    g_free (args[4]);
+    call_thpool_method_sync (vg_name, pool_name, "LvCreate", params, NULL, error);
 
-    return success;
+    return (*error == NULL);
 }
 
 /**
@@ -1869,19 +1881,34 @@ gboolean bd_lvm_thlvcreate (gchar *vg_name, gchar *pool_name, gchar *lv_name, gu
  * thin LV or %NULL if failed to determine (@error) is set in those cases)
  */
 gchar* bd_lvm_thlvpoolname (gchar *vg_name, gchar *lv_name, GError **error) {
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar *args[6] = {"lvs", "--noheadings", "-o", "pool_lv", NULL, NULL};
-    args[4] = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    GVariant *prop = NULL;
+    gboolean is_thin = FALSE;
+    gchar *pool_obj_path = NULL;
+    gchar *ret = NULL;
 
-    success = call_lvm_and_capture_output (args, &output, error);
-    g_free (args[4]);
-
-    if (!success)
-        /* the error is already populated from the call */
+    prop = get_lv_property (vg_name, lv_name, "IsThinVolume", error);
+    if (!prop)
         return NULL;
+    is_thin = g_variant_get_boolean (prop);
+    g_variant_unref (prop);
 
-    return g_strstrip (output);
+    if (!is_thin) {
+        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_NOEXIST,
+                     "The LV '%s' is not a thin LV and thus have no thin pool", lv_name);
+        return NULL;
+    }
+    prop = get_lv_property (vg_name, lv_name, "PoolLv", error);
+    if (!prop)
+        return NULL;
+    g_variant_get (prop, "o", &pool_obj_path);
+    prop = get_object_property (pool_obj_path, LV_INTF, "Name", error);
+    g_free (pool_obj_path);
+    if (!prop)
+        return NULL;
+    g_variant_get (prop, "s", &ret);
+    g_variant_unref (prop);
+
+    return ret;
 }
 
 /**
@@ -1896,23 +1923,26 @@ gchar* bd_lvm_thlvpoolname (gchar *vg_name, gchar *lv_name, GError **error) {
  * thin LV was successfully created or not.
  */
 gboolean bd_lvm_thsnapshotcreate (gchar *vg_name, gchar *origin_name, gchar *snapshot_name, gchar *pool_name, GError **error) {
-    gchar *args[8] = {"lvcreate", "-s", "-n", snapshot_name, NULL, NULL, NULL, NULL};
-    guint next_arg = 4;
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
+
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", snapshot_name));
+    g_variant_builder_add_value (&builder, g_variant_new ("t", 0));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
     if (pool_name) {
-        args[next_arg] = "--thinpool";
-        next_arg++;
-        args[next_arg] = pool_name;
-        next_arg++;
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+        g_variant_builder_add (&builder, "{sv}", "thinpool", g_variant_new ("s", pool_name));
+        extra = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
     }
 
-    args[next_arg] = g_strdup_printf ("%s/%s", vg_name, origin_name);
+    call_lv_method_sync (vg_name, origin_name, "Snapshot", params, extra, error);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[next_arg]);
-
-    return success;
+    return (*error == NULL);
 }
 
 /**
