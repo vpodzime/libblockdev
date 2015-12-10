@@ -1595,17 +1595,20 @@ gboolean bd_lvm_lvremove (gchar *vg_name, gchar *lv_name, gboolean force, GError
  * Returns: whether the @vg_name/@lv_name LV was successfully resized or not
  */
 gboolean bd_lvm_lvresize (gchar *vg_name, gchar *lv_name, guint64 size, GError **error) {
-    gchar *args[6] = {"lvresize", "--force", "-L", NULL, NULL, NULL};
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariantType *type = NULL;
+    GVariant *params = NULL;
 
-    args[3] = g_strdup_printf ("%"G_GUINT64_FORMAT"K", size/1024);
-    args[4] = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("t", size));
+    type = g_variant_type_new ("a(ott)");
+    g_variant_builder_add_value (&builder, g_variant_new_array (type, NULL, 0));
+    g_variant_type_free (type);
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[3]);
-    g_free (args[4]);
-
-    return success;
+    call_lv_method_sync (vg_name, lv_name, "Resize", params, NULL, error);
+    return (*error == NULL);
 }
 
 /**
