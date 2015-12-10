@@ -1528,34 +1528,54 @@ gchar* bd_lvm_lvorigin (gchar *vg_name, gchar *lv_name, GError **error) {
  * Returns: whether the given @vg_name/@lv_name LV was successfully created or not
  */
 gboolean bd_lvm_lvcreate (gchar *vg_name, gchar *lv_name, guint64 size, gchar *type, gchar **pv_list, GError **error) {
-    guint8 pv_list_len = pv_list ? g_strv_length (pv_list) : 0;
-    gchar **args = g_new0 (gchar*, pv_list_len + 10);
-    gboolean success = FALSE;
-    guint64 i = 0;
-    guint64 j = 0;
+    GVariantBuilder builder;
+    gchar *path = NULL;
+    gchar **pv = NULL;
+    GVariant *pvs = NULL;
+    GVariantType *var_type = NULL;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
 
-    args[i++] = "lvcreate";
-    args[i++] = "-n";
-    args[i++] = lv_name;
-    args[i++] = "-L";
-    args[i++] = g_strdup_printf ("%"G_GUINT64_FORMAT"K", size/1024);
-    args[i++] = "-y";
-    if (type) {
-        args[i++] = "--type";
-        args[i++] = type;
+    /* build the array of PVs (object paths) */
+    if (pv_list) {
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+        for (pv = pv_list; *pv; pv++) {
+            path = get_object_path (*pv, error);
+            if (!path) {
+                g_variant_builder_clear (&builder);
+                return FALSE;
+            }
+            g_variant_builder_add_value (&builder, g_variant_new ("(ott)", path, 0, 0));
+        }
+        pvs = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
+    } else {
+        var_type = g_variant_type_new ("a(ott)");
+        pvs = g_variant_new_array (var_type, NULL, 0);
+        g_variant_type_free (var_type);
     }
-    args[i++] = vg_name;
 
-    for (j=0; j < pv_list_len; j++)
-        args[i++] = pv_list[j];
+    /* build the params tuple */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", lv_name));
+    g_variant_builder_add_value (&builder, g_variant_new ("t", size));
+    g_variant_builder_add_value (&builder, pvs);
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    args[i] = NULL;
+    if (type) {
+        /* and now the extra params */
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+        if (pv_list && g_strcmp0 (type, "striped") == 0)
+            g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "stripes", g_variant_new ("i", g_strv_length (pv_list))));
+        else
+            g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "type", g_variant_new ("s", type)));
+        extra = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
+    }
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[4]);
-    g_free (args);
-
-    return success;
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "LvCreate", params, extra, error);
+    return ((*error) == NULL);
 }
 
 /**
