@@ -1618,20 +1618,19 @@ gboolean bd_lvm_lvresize (gchar *vg_name, gchar *lv_name, guint64 size, GError *
  * Returns: whether the @vg_name/@lv_name LV was successfully activated or not
  */
 gboolean bd_lvm_lvactivate (gchar *vg_name, gchar *lv_name, gboolean ignore_skip, GError **error) {
-    gchar *args[5] = {"lvchange", "-ay", NULL, NULL, NULL};
-    guint8 next_arg = 2;
-    gboolean success = FALSE;
+    GVariant *params = g_variant_new ("(t)", 0);
+    GVariantBuilder builder;
+    GVariant *extra = NULL;
 
     if (ignore_skip) {
-        args[next_arg] = "-K";
-        next_arg++;
+        g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+        g_variant_builder_add (&builder, "{sv}", "-K", g_variant_new ("s", ""));
+        extra = g_variant_builder_end (&builder);
+        g_variant_builder_clear (&builder);
     }
-    args[next_arg] = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    call_lv_method_sync (vg_name, lv_name, "Activate", params, extra, error);
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[next_arg]);
-
-    return success;
+    return (*error == NULL);
 }
 
 /**
@@ -1643,15 +1642,9 @@ gboolean bd_lvm_lvactivate (gchar *vg_name, gchar *lv_name, gboolean ignore_skip
  * Returns: whether the @vg_name/@lv_name LV was successfully deactivated or not
  */
 gboolean bd_lvm_lvdeactivate (gchar *vg_name, gchar *lv_name, GError **error) {
-    gchar *args[4] = {"lvchange", "-an", NULL, NULL};
-    gboolean success = FALSE;
-
-    args[2] = g_strdup_printf ("%s/%s", vg_name, lv_name);
-
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[2]);
-
-    return success;
+    GVariant *params = g_variant_new ("(t)", 0);
+    call_lv_method_sync (vg_name, lv_name, "Deactivate", params, NULL, error);
+    return (*error == NULL);
 }
 
 /**
