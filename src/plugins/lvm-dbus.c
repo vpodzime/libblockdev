@@ -44,6 +44,7 @@ static gchar *global_config_str = NULL;
 #define LV_OBJ_PREFIX LVM_OBJ_PREFIX"/Lv"
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
+#define LV_CMN_INTF LVM_BUS_NAME".LvCommon"
 #define LV_INTF LVM_BUS_NAME".Lv"
 #define THPOOL_INTF LVM_BUS_NAME".ThinPool"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
@@ -649,7 +650,7 @@ static GVariant* get_lv_property (gchar *vg_name, gchar *lv_name, gchar *propert
 
     lv_spec = g_strdup_printf ("%s/%s", vg_name, lv_name);
 
-    ret = get_lvm_object_property (lv_spec, LV_INTF, property, error);
+    ret = get_lvm_object_property (lv_spec, LV_CMN_INTF, property, error);
     g_free (lv_spec);
 
     return ret;
@@ -731,7 +732,7 @@ static GVariant* get_lv_properties (gchar *vg_name, gchar *lv_name, GError **err
 
     lvm_spec = g_strdup_printf ("%s/%s", vg_name, lv_name);
 
-    ret = get_lvm_object_properties (lvm_spec, LV_INTF, error);
+    ret = get_lvm_object_properties (lvm_spec, LV_CMN_INTF, error);
     g_free (lvm_spec);
 
     return ret;
@@ -1503,7 +1504,7 @@ gchar* bd_lvm_lvorigin (gchar *vg_name, gchar *lv_name, GError **error) {
         g_free (obj_path);
         return NULL;
     }
-    prop = get_object_property (obj_path, LV_INTF, "Name", error);
+    prop = get_object_property (obj_path, LV_CMN_INTF, "Name", error);
     if (!prop) {
         g_free (obj_path);
         return NULL;
@@ -1917,7 +1918,7 @@ gchar* bd_lvm_thlvpoolname (gchar *vg_name, gchar *lv_name, GError **error) {
     if (!prop)
         return NULL;
     g_variant_get (prop, "o", &pool_obj_path);
-    prop = get_object_property (pool_obj_path, LV_INTF, "Name", error);
+    prop = get_object_property (pool_obj_path, LV_CMN_INTF, "Name", error);
     g_free (pool_obj_path);
     if (!prop)
         return NULL;
