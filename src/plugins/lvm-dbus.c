@@ -46,6 +46,7 @@ static gchar *global_config_str = NULL;
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_CMN_INTF LVM_BUS_NAME".LvCommon"
 #define LV_INTF LVM_BUS_NAME".Lv"
+#define SNAP_INTF LVM_BUS_NAME".Snapshot"
 #define THPOOL_INTF LVM_BUS_NAME".ThinPool"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
 #define DBUS_TOP_OBJ "/org/freedesktop/DBus"
@@ -1706,15 +1707,18 @@ gboolean bd_lvm_lvsnapshotcreate (gchar *vg_name, gchar *origin_name, gchar *sna
  * Returns: whether the @vg_name/@snapshot_name LV snapshot was successfully merged or not
  */
 gboolean bd_lvm_lvsnapshotmerge (gchar *vg_name, gchar *snapshot_name, GError **error) {
-    gchar *args[4] = {"lvconvert", "--merge", NULL, NULL};
-    gboolean success = FALSE;
+    gchar *obj_id = NULL;
+    gchar *obj_path = NULL;
 
-    args[2] = g_strdup_printf ("%s/%s", vg_name, snapshot_name);
+    /* get object path for vg_name/snapshot_name and call SNAP_INTF, "Merge" */
+    obj_id = g_strdup_printf ("%s/%s", vg_name, snapshot_name);
+    obj_path = get_object_path (obj_id, error);
+    g_free (obj_id);
+    if (!obj_path)
+        return FALSE;
 
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[2]);
-
-    return success;
+    call_lvm_method_sync (obj_path, SNAP_INTF, "Merge", NULL, NULL, error);
+    return (*error == NULL);
 }
 
 /**
