@@ -814,6 +814,9 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
     g_variant_dict_lookup (&dict, "Uuid", "s", &(data->uuid));
     g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->size));
     g_variant_dict_lookup (&dict, "Attr", "s", &(data->attr));
+
+    /* TODO: SegType actually has the 'as' format because it can potentially be
+             a list of multiple different segment types */
     g_variant_dict_lookup (&dict, "SegType", "s", &(data->segtype));
 
     /* returns an object path for the VG */
