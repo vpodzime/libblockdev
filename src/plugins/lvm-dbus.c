@@ -2420,22 +2420,41 @@ BDLVMCacheStats* bd_lvm_cache_stats (gchar *vg_name, gchar *cached_lv, GError **
  * @vg_name/@lv_name LV
  */
 gchar* bd_lvm_data_lv_name (gchar *vg_name, gchar *lv_name, GError **error) {
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar *args[6] = {"lvs", "--noheadings", "-o", "data_lv", NULL, NULL};
+    GVariant *prop = NULL;
+    gchar *obj_id = NULL;
+    gchar *obj_path = NULL;
+    gchar *ret = NULL;
 
-    args[4] = g_strdup_printf ("%s/%s", vg_name, lv_name);
-
-    success = call_lvm_and_capture_output (args, &output, error);
-    g_free (args[4]);
-
-    if (!success)
-        /* the error is already populated from the call */
+    obj_id = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    obj_path = get_object_path (obj_id, error);
+    g_free (obj_id);
+    if (!obj_path)
         return NULL;
 
-    /* replace the '[' and ']' (marking the LV as internal) with spaces and then
-       remove all the leading and trailing whitespace */
-    return g_strstrip (g_strdelimit (output, "[]", ' '));
+    prop = get_object_property (obj_path, THPOOL_INTF, "DataLv", error);
+    g_free (obj_path);
+    if (!prop) {
+        g_clear_error (error);
+        return NULL;
+    }
+    g_variant_get (prop, "s", &obj_path);
+    g_variant_unref (prop);
+
+    if (g_strcmp0 (obj_path, "/") == 0) {
+        /* no origin LV */
+        g_free (obj_path);
+        return NULL;
+    }
+    prop = get_object_property (obj_path, LV_CMN_INTF, "Name", error);
+    if (!prop) {
+        g_free (obj_path);
+        return NULL;
+    }
+
+    g_variant_get (prop, "s", &ret);
+    g_variant_unref (prop);
+
+    return g_strstrip (g_strdelimit (ret, "[]", ' '));
 }
 
 /**
@@ -2448,20 +2467,39 @@ gchar* bd_lvm_data_lv_name (gchar *vg_name, gchar *lv_name, GError **error) {
  * @vg_name/@lv_name LV
  */
 gchar* bd_lvm_metadata_lv_name (gchar *vg_name, gchar *lv_name, GError **error) {
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar *args[6] = {"lvs", "--noheadings", "-o", "metadata_lv", NULL, NULL};
+    GVariant *prop = NULL;
+    gchar *obj_id = NULL;
+    gchar *obj_path = NULL;
+    gchar *ret = NULL;
 
-    args[4] = g_strdup_printf ("%s/%s", vg_name, lv_name);
-
-    success = call_lvm_and_capture_output (args, &output, error);
-    g_free (args[4]);
-
-    if (!success)
-        /* the error is already populated from the call */
+    obj_id = g_strdup_printf ("%s/%s", vg_name, lv_name);
+    obj_path = get_object_path (obj_id, error);
+    g_free (obj_id);
+    if (!obj_path)
         return NULL;
 
-    /* replace the '[' and ']' (marking the LV as internal) with spaces and then
-       remove all the leading and trailing whitespace */
-    return g_strstrip (g_strdelimit (output, "[]", ' '));
+    prop = get_object_property (obj_path, THPOOL_INTF, "MetaDataLv", error);
+    g_free (obj_path);
+    if (!prop) {
+        g_clear_error (error);
+        return NULL;
+    }
+    g_variant_get (prop, "s", &obj_path);
+    g_variant_unref (prop);
+
+    if (g_strcmp0 (obj_path, "/") == 0) {
+        /* no origin LV */
+        g_free (obj_path);
+        return NULL;
+    }
+    prop = get_object_property (obj_path, LV_CMN_INTF, "Name", error);
+    if (!prop) {
+        g_free (obj_path);
+        return NULL;
+    }
+
+    g_variant_get (prop, "s", &ret);
+    g_variant_unref (prop);
+
+    return g_strstrip (g_strdelimit (ret, "[]", ' '));
 }
