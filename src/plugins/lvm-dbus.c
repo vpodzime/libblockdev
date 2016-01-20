@@ -806,6 +806,7 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
     BDLVMLVdata *data = g_new0 (BDLVMLVdata, 1);
     GVariantDict dict;
     gchar *value = NULL;
+    GVariant *seg_type = NULL;
     GVariant *vg_name = NULL;
 
     g_variant_dict_init (&dict, props);
@@ -815,9 +816,13 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
     g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->size));
     g_variant_dict_lookup (&dict, "Attr", "s", &(data->attr));
 
-    /* TODO: SegType actually has the 'as' format because it can potentially be
-             a list of multiple different segment types */
-    g_variant_dict_lookup (&dict, "SegType", "s", &(data->segtype));
+    /* XXX: how to deal with LVs with multiple segment types? We are just taking
+            the first one now. */
+    seg_type = g_variant_dict_lookup_value (&dict, "SegType", (GVariantType*) "as");
+    if (seg_type) {
+        g_variant_get_child (seg_type, 0, "s", &(data->segtype));
+        g_variant_unref (seg_type);
+    }
 
     /* returns an object path for the VG */
     g_variant_dict_lookup (&dict, "Vg", "o", &value);
