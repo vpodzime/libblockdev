@@ -802,11 +802,36 @@ static BDLVMVGdata* get_vg_data_from_props (GVariant *props, GError **error __at
     return data;
 }
 
+static gchar get_lv_attr (GVariantDict *props, gchar *prop) {
+    GVariant *value = NULL;
+    gchar *letter = NULL;
+    gchar *desc = NULL;
+    gchar ret = '\0';
+
+    value = g_variant_dict_lookup_value (props, prop, (GVariantType*) "(ss)");
+    g_variant_get (value, "(ss)", &letter, &desc);
+    ret = letter[0];
+    g_free (letter);
+    g_free (desc);
+    g_variant_unref (value);
+
+    return ret;
+}
+
+static gchar get_lv_attr_bool (GVariantDict *props, gchar *prop, gchar letter) {
+    gboolean set = FALSE;
+    g_variant_dict_lookup (props, prop, "b", &set);
+    if (set)
+        return letter;
+    else
+        return '-';
+}
+
 static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __attribute__((unused))) {
     BDLVMLVdata *data = g_new0 (BDLVMLVdata, 1);
     GVariantDict dict;
-    gchar *value = NULL;
-    GVariant *seg_type = NULL;
+    GVariant *value = NULL;
+    gchar *vg_path = NULL;
     GVariant *vg_name = NULL;
 
     g_variant_dict_init (&dict, props);
@@ -814,20 +839,36 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
     g_variant_dict_lookup (&dict, "Name", "s", &(data->lv_name));
     g_variant_dict_lookup (&dict, "Uuid", "s", &(data->uuid));
     g_variant_dict_lookup (&dict, "SizeBytes", "t", &(data->size));
-    g_variant_dict_lookup (&dict, "Attr", "s", &(data->attr));
+
+    /* construct attr from properties here */
+    data->attr = g_new0 (gchar, 11);
+    data->attr[0] = get_lv_attr (&dict, "VolumeType");
+    data->attr[1] = get_lv_attr (&dict, "Permissions");
+    data->attr[2] = get_lv_attr (&dict, "AllocationPolicy");
+    data->attr[3] = get_lv_attr_bool (&dict, "FixedMinor", 'm');
+    data->attr[4] = get_lv_attr (&dict, "State");
+    if (data->attr[4] == 'a')
+        /* open/unknown not reported, let's derive it from State for now */
+        data->attr[5] = 'o';
+    else
+        data->attr[5] = '-';
+    data->attr[6] = get_lv_attr (&dict, "TargetType");
+    data->attr[7] = get_lv_attr_bool (&dict, "ZeroBlocks", 'z');
+    data->attr[8] = get_lv_attr (&dict, "Health");
+    data->attr[9] = get_lv_attr_bool (&dict, "SkipActivation", 'k');
 
     /* XXX: how to deal with LVs with multiple segment types? We are just taking
             the first one now. */
-    seg_type = g_variant_dict_lookup_value (&dict, "SegType", (GVariantType*) "as");
-    if (seg_type) {
-        g_variant_get_child (seg_type, 0, "s", &(data->segtype));
-        g_variant_unref (seg_type);
+    value = g_variant_dict_lookup_value (&dict, "SegType", (GVariantType*) "as");
+    if (value) {
+        g_variant_get_child (value, 0, "s", &(data->segtype));
+        g_variant_unref (value);
     }
 
     /* returns an object path for the VG */
-    g_variant_dict_lookup (&dict, "Vg", "o", &value);
+    g_variant_dict_lookup (&dict, "Vg", "o", &vg_path);
 
-    vg_name = get_object_property (value, VG_INTF, "Name", error);
+    vg_name = get_object_property (vg_path, VG_INTF, "Name", error);
     g_variant_get (vg_name, "s", &(data->vg_name));
 
     g_variant_dict_clear (&dict);
