@@ -48,8 +48,10 @@ static gchar *global_config_str = NULL;
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_CMN_INTF LVM_BUS_NAME".LvCommon"
 #define LV_INTF LVM_BUS_NAME".Lv"
+#define CACHED_LV_INTF LVM_BUS_NAME".CachedLv"
 #define SNAP_INTF LVM_BUS_NAME".Snapshot"
 #define THPOOL_INTF LVM_BUS_NAME".ThinPool"
+#define CACHE_POOL_INTF LVM_BUS_NAME".CachePool"
 #define DBUS_TOP_IFACE "org.freedesktop.DBus"
 #define DBUS_TOP_OBJ "/org/freedesktop/DBus"
 #define DBUS_PROPS_IFACE "org.freedesktop.DBus.Properties"
@@ -244,34 +246,6 @@ gboolean init() {
 
     return TRUE;
 }
-
-/* ====================== REMOVE THIS ===================================== */
-static gboolean call_lvm_and_report_error (gchar **args, GError **error) {
-    gboolean success = FALSE;
-    guint i = 0;
-    guint args_length = g_strv_length (args);
-
-    /* don't allow global config string changes during the run */
-    g_mutex_lock (&global_config_lock);
-
-    /* allocate enough space for the args plus "lvm", "--config" and NULL */
-    gchar **argv = g_new0 (gchar*, args_length + 3);
-
-    /* construct argv from args with "lvm" prepended */
-    argv[0] = "lvm";
-    for (i=0; i < args_length; i++)
-        argv[i+1] = args[i];
-    argv[args_length + 1] = global_config_str ? g_strdup_printf("--config=%s", global_config_str) : NULL;
-    argv[args_length + 2] = NULL;
-
-    success = bd_utils_exec_and_report_error (argv, error);
-    g_mutex_unlock (&global_config_lock);
-    g_free (argv[args_length + 1]);
-    g_free (argv);
-
-    return success;
-}
-/* =============================== REMOVE THIS =================================== */
 
 static gchar** get_existing_objects (gchar *obj_prefix, GError **error) {
     GVariant *intro_v = NULL;
@@ -1813,6 +1787,8 @@ BDLVMLVdata** bd_lvm_lvs (gchar *vg_name, GError **error) {
         filter_lvs_by_vg (th_pools, vg_name, error);
     n_th_pools = g_strv_length (th_pools);
 
+    /* TODO: cache pools */
+
     n_all = n_lvs + n_hid_lvs + n_th_pools;
     if (n_all == 0) {
         /* no LVs */
@@ -2183,7 +2159,12 @@ gboolean bd_lvm_cache_create_pool (gchar *vg_name, gchar *pool_name, guint64 poo
     gboolean success = FALSE;
     gchar *type = NULL;
     gchar *name = NULL;
-    gchar *args[10] = {"lvconvert", "-y", "--type", "cache-pool", "--poolmetadata", NULL, "--cachemode", NULL, NULL, NULL};
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+    GVariant *extra = NULL;
+    gchar *lv_id = NULL;
+    gchar *lv_obj_path = NULL;
+    const gchar *mode_str = NULL;
 
     /* create an LV for the pool */
     type = get_lv_type_from_flags (flags, FALSE, error);
@@ -2212,20 +2193,40 @@ gboolean bd_lvm_cache_create_pool (gchar *vg_name, gchar *pool_name, guint64 poo
     }
 
     /* create the cache pool from the two LVs */
-    args[5] = name;
-    args[7] = (gchar *) bd_lvm_cache_get_mode_str (mode, error);
-    if (!args[7]) {
-        g_free (args[5]);
+    /* build the params tuple */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    lv_id = g_strdup_printf ("%s/%s", vg_name, name);
+    lv_obj_path = get_object_path (lv_id, error);
+    g_free (lv_id);
+    if (!lv_obj_path) {
+        g_variant_builder_clear (&builder);
         return FALSE;
     }
-    name = g_strdup_printf ("%s/%s", vg_name, pool_name);
-    args[8] = name;
-    success = call_lvm_and_report_error (args, error);
-    g_free (args[5]);
-    g_free (args[8]);
+    g_variant_builder_add_value (&builder, g_variant_new ("o", lv_obj_path));
+    lv_id = g_strdup_printf ("%s/%s", vg_name, pool_name);
+    lv_obj_path = get_object_path (lv_id, error);
+    g_free (lv_id);
+    if (!lv_obj_path) {
+        g_variant_builder_clear (&builder);
+        return FALSE;
+    }
+    g_variant_builder_add_value (&builder, g_variant_new ("o", lv_obj_path));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    /* just return the result of the last step (it sets error on fail) */
-    return success;
+    /* build the dictionary with the extra params */
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
+    mode_str = bd_lvm_cache_get_mode_str (mode, error);
+    if (!mode_str) {
+        g_variant_builder_clear (&builder);
+        return FALSE;
+    }
+    g_variant_builder_add (&builder, "{sv}", "cachemode", g_variant_new ("s", mode_str));
+    extra = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
+
+    call_lvm_obj_method_sync (vg_name, VG_INTF, "CreateCachePool", params, extra, error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -2238,16 +2239,25 @@ gboolean bd_lvm_cache_create_pool (gchar *vg_name, gchar *pool_name, guint64 poo
  * Returns: whether the @cache_pool_lv was successfully attached to the @data_lv or not
  */
 gboolean bd_lvm_cache_attach (gchar *vg_name, gchar *data_lv, gchar *cache_pool_lv, GError **error) {
-    gchar *args[7] = {"lvconvert", "--type", "cache", "--cachepool", NULL, NULL, NULL};
-    gboolean success = FALSE;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+    gchar *lv_id = NULL;
+    gchar *lv_obj_path = NULL;
 
-    args[4] = g_strdup_printf ("%s/%s", vg_name, cache_pool_lv);
-    args[5] = g_strdup_printf ("%s/%s", vg_name, data_lv);
-    success = call_lvm_and_report_error (args, error);
+    lv_id = g_strdup_printf ("%s/%s", vg_name, data_lv);
+    lv_obj_path = get_object_path (lv_id, error);
+    g_free (lv_id);
+    if (!lv_obj_path)
+        return FALSE;
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("s", lv_obj_path));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
-    g_free (args[4]);
-    g_free (args[5]);
-    return success;
+    lv_id = g_strdup_printf ("%s/%s", vg_name, cache_pool_lv);
+
+    call_lvm_obj_method_sync (lv_id, CACHE_POOL_INTF, "CacheLv", params, NULL, error);
+    return ((*error) == NULL);
 }
 
 /**
@@ -2262,17 +2272,20 @@ gboolean bd_lvm_cache_attach (gchar *vg_name, gchar *data_lv, gchar *cache_pool_
  * Note: synces the cache first
  */
 gboolean bd_lvm_cache_detach (gchar *vg_name, gchar *cached_lv, gboolean destroy, GError **error) {
-    /* need to both "assume yes" and "force" to get rid of the interactive
-       questions in case of "--uncache" */
-    gchar *args[6] = {"lvconvert", "-y", "-f", NULL, NULL, NULL};
-    gboolean success = FALSE;
+    gchar *lv_id = NULL;
+    gchar *cache_pool_name = NULL;
 
-    args[3] = destroy ? "--uncache" : "--splitcache";
-    args[4] = g_strdup_printf ("%s/%s", vg_name, cached_lv);
-    success = call_lvm_and_report_error (args, error);
-
-    g_free (args[4]);
-    return success;
+    cache_pool_name = bd_lvm_cache_pool_name (vg_name, cached_lv, error);
+    if (!cache_pool_name)
+        return FALSE;
+    lv_id = g_strdup_printf ("%s/%s", vg_name, cached_lv);
+    call_lvm_obj_method_sync (lv_id, CACHED_LV_INTF, "DetachCachePool", NULL, NULL, error);
+    if ((*error) != NULL)
+        return FALSE;
+    if (destroy)
+        return bd_lvm_lvremove (vg_name, cache_pool_name, TRUE, error);
+    else
+        return TRUE;
 }
 
 /**
@@ -2333,11 +2346,23 @@ gchar* bd_lvm_cache_pool_name (gchar *vg_name, gchar *cached_lv, GError **error)
     gchar *name_start = NULL;
     gchar *name_end = NULL;
     gchar *pool_name = NULL;
+    gchar *lv_spec = NULL;
+    GVariant *prop = NULL;
+    gchar *pool_obj_path = NULL;
 
     /* same as for a thin LV, but with square brackets */
-    ret = bd_lvm_thlvpoolname (vg_name, cached_lv, error);
-    if (!ret)
+    lv_spec = g_strdup_printf ("%s/%s", vg_name, cached_lv);
+    prop = get_lvm_object_property (lv_spec, CACHED_LV_INTF, "CachePool", error);
+    g_free (lv_spec);
+    if (!prop)
         return NULL;
+    g_variant_get (prop, "s", &pool_obj_path);
+    prop = get_object_property (pool_obj_path, LV_CMN_INTF, "Name", error);
+    g_free (pool_obj_path);
+    if (!prop)
+        return NULL;
+    g_variant_get (prop, "s", &ret);
+    g_variant_unref (prop);
 
     name_start = strchr (ret, '[');
     if (!name_start) {
