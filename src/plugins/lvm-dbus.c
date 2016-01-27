@@ -42,6 +42,8 @@ static gchar *global_config_str = NULL;
 #define PV_OBJ_PREFIX LVM_OBJ_PREFIX"/Pv"
 #define VG_OBJ_PREFIX LVM_OBJ_PREFIX"/Vg"
 #define LV_OBJ_PREFIX LVM_OBJ_PREFIX"/Lv"
+#define HIDDEN_LV_OBJ_PREFIX LVM_OBJ_PREFIX"/HiddenLv"
+#define THIN_POOL_OBJ_PREFIX LVM_OBJ_PREFIX"/ThinPool"
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_CMN_INTF LVM_BUS_NAME".LvCommon"
@@ -268,87 +270,6 @@ static gboolean call_lvm_and_report_error (gchar **args, GError **error) {
     g_free (argv);
 
     return success;
-}
-
-static gboolean call_lvm_and_capture_output (gchar **args, gchar **output, GError **error) {
-    gboolean success = FALSE;
-    guint i = 0;
-    guint args_length = g_strv_length (args);
-
-    /* don't allow global config string changes during the run */
-    g_mutex_lock (&global_config_lock);
-
-    /* allocate enough space for the args plus "lvm", "--config" and NULL */
-    gchar **argv = g_new0 (gchar*, args_length + 3);
-
-    /* construct argv from args with "lvm" prepended */
-    argv[0] = "lvm";
-    for (i=0; i < args_length; i++)
-        argv[i+1] = args[i];
-    argv[args_length + 1] = global_config_str ? g_strdup_printf("--config=%s", global_config_str) : NULL;
-    argv[args_length + 2] = NULL;
-
-    success = bd_utils_exec_and_capture_output (argv, output, error);
-    g_mutex_unlock (&global_config_lock);
-    g_free (argv[args_length + 1]);
-    g_free (argv);
-
-    return success;
-}
-
-/**
- * parse_lvm_vars:
- * @str: string to parse
- * @num_items: (out): number of parsed items
- *
- * Returns: (transfer full): a GHashTable containing key-value items parsed from the @string
- */
-static GHashTable* parse_lvm_vars (gchar *str, guint *num_items) {
-    GHashTable *table = NULL;
-    gchar **items = NULL;
-    gchar **item_p = NULL;
-    gchar **key_val = NULL;
-
-    table = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-    *num_items = 0;
-
-    items = g_strsplit_set (str, " \t\n", 0);
-    for (item_p=items; *item_p; item_p++) {
-        key_val = g_strsplit (*item_p, "=", 2);
-        if (g_strv_length (key_val) == 2) {
-            /* we only want to process valid lines (with the '=' character) */
-            g_hash_table_insert (table, key_val[0], key_val[1]);
-            (*num_items)++;
-        } else
-            /* invalid line, just free key_val */
-            g_strfreev (key_val);
-    }
-
-    g_strfreev (items);
-    return table;
-}
-
-static BDLVMLVdata* get_lv_data_from_table (GHashTable *table, gboolean free_table) {
-    BDLVMLVdata *data = g_new0 (BDLVMLVdata, 1);
-    gchar *value = NULL;
-
-    data->lv_name = g_strdup (g_hash_table_lookup (table, "LVM2_LV_NAME"));
-    data->vg_name = g_strdup (g_hash_table_lookup (table, "LVM2_VG_NAME"));
-    data->uuid = g_strdup (g_hash_table_lookup (table, "LVM2_LV_UUID"));
-
-    value = (gchar*) g_hash_table_lookup (table, "LVM2_LV_SIZE");
-    if (value)
-        data->size = g_ascii_strtoull (value, NULL, 0);
-    else
-        data->size = 0;
-
-    data->attr = g_strdup (g_hash_table_lookup (table, "LVM2_LV_ATTR"));
-    data->segtype = g_strdup (g_hash_table_lookup (table, "LVM2_SEGTYPE"));
-
-    if (free_table)
-        g_hash_table_destroy (table);
-
-    return data;
 }
 /* =============================== REMOVE THIS =================================== */
 
@@ -1794,6 +1715,56 @@ BDLVMLVdata* bd_lvm_lvinfo (gchar *vg_name, gchar *lv_name, GError **error) {
     return ret;
 }
 
+static gchar* get_lv_vg_name (gchar *lv_obj_path, GError **error) {
+    GVariant *value = NULL;
+    gchar *vg_obj_path = NULL;
+    gchar *ret = NULL;
+
+    value = get_object_property (lv_obj_path, LV_CMN_INTF, "Vg", error);
+    g_variant_get (value, "o", &vg_obj_path);
+    g_variant_unref (value);
+
+    value = get_object_property (vg_obj_path, VG_INTF, "Name", error);
+    g_variant_get (value, "s", &ret);
+    g_free (vg_obj_path);
+    g_variant_unref (value);
+
+    return ret;
+}
+
+static gboolean filter_lvs_by_vg (gchar **lvs, gchar *vg_name, GError **error) {
+    gchar **lv_p = lvs;
+    guint64 offset = 1;
+    gchar *lv_vg_name = NULL;
+
+    if (!lvs)
+        /* nothing to do */
+        return TRUE;
+
+    while (*lv_p) {
+        if (**lv_p == '\0') {
+            /* empty place, move the next (+offset) thing here and go on */
+            *lv_p = *(lv_p + offset);
+            *(lv_p + offset) = "";
+        } else {
+            lv_vg_name = get_lv_vg_name (*lv_p, error);
+            if (!lv_vg_name)
+                return FALSE;
+            if (g_strcmp0 (lv_vg_name, vg_name) != 0) {
+                /* not matching, move the next (+offset) item to this place and
+                   mark its place as empty */
+                *lv_p = *(lv_p + offset);
+                *(lv_p + offset) = "";
+                offset++;
+            } else
+                /* matching, just go on to the next place */
+                lv_p++;
+            g_free (lv_vg_name);
+        }
+    }
+    return TRUE;
+}
+
 /**
  * bd_lvm_lvs:
  * @vg_name: (allow-none): name of the VG to get information about LVs from
@@ -1803,70 +1774,116 @@ BDLVMLVdata* bd_lvm_lvinfo (gchar *vg_name, gchar *lv_name, GError **error) {
  * @vg_name VG or in system if @vg_name is %NULL
  */
 BDLVMLVdata** bd_lvm_lvs (gchar *vg_name, GError **error) {
-    gchar *args[11] = {"lvs", "--noheadings", "--nosuffix", "--nameprefixes",
-                       "--unquoted", "--units=b", "-a",
-                       "-o", "vg_name,lv_name,lv_uuid,lv_size,lv_attr,segtype",
-                       NULL, NULL};
-
-    GHashTable *table = NULL;
-    gboolean success = FALSE;
-    gchar *output = NULL;
-    gchar **lines = NULL;
-    gchar **lines_p = NULL;
-    guint num_items;
-    GPtrArray *lvs = g_ptr_array_new ();
-    BDLVMLVdata *lvdata = NULL;
+    gchar **lvs = NULL;
+    guint64 n_lvs = 0;
+    gchar **hid_lvs = NULL;
+    guint64 n_hid_lvs = 0;
+    gchar **th_pools = NULL;
+    guint64 n_th_pools = 0;
+    guint64 n_all = 0;
+    GVariant *props = NULL;
     BDLVMLVdata **ret = NULL;
     guint64 i = 0;
+    guint64 j = 0;
 
-    if (vg_name)
-        args[9] = vg_name;
-
-    success = call_lvm_and_capture_output (args, &output, error);
-
-    if (!success) {
-        if (g_error_matches (*error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_NOOUT)) {
-            /* no output => no LVs, not an error */
-            g_clear_error (error);
-            ret = g_new0 (BDLVMLVdata*, 1);
-            ret[0] = NULL;
-            return ret;
-        }
-        else
-            /* the error is already populated from the call */
-            return NULL;
-    }
-
-    lines = g_strsplit (output, "\n", 0);
-    g_free (output);
-
-    for (lines_p = lines; *lines_p; lines_p++) {
-        table = parse_lvm_vars ((*lines_p), &num_items);
-        if (table && (num_items == 6)) {
-            /* valid line, try to parse and record it */
-            lvdata = get_lv_data_from_table (table, TRUE);
-            if (lvdata)
-                g_ptr_array_add (lvs, lvdata);
-        } else
-            if (table)
-                g_hash_table_destroy (table);
-    }
-
-    g_strfreev (lines);
-
-    if (lvs->len == 0) {
-        g_set_error (error, BD_LVM_ERROR, BD_LVM_ERROR_PARSE,
-                     "Failed to parse information about LVs");
+    lvs = get_existing_objects (LV_OBJ_PREFIX, error);
+    if (!lvs && (*error)) {
+        /* error is already populated */
         return NULL;
+    } else
+        filter_lvs_by_vg (lvs, vg_name, error);
+    n_lvs = g_strv_length (lvs);
+
+    hid_lvs = get_existing_objects (HIDDEN_LV_OBJ_PREFIX, error);
+    if (!hid_lvs && (*error)) {
+        /* error is already populated */
+        g_strfreev (lvs);
+        return NULL;
+    } else
+        filter_lvs_by_vg (hid_lvs, vg_name, error);
+    n_hid_lvs = g_strv_length (hid_lvs);
+
+    th_pools = get_existing_objects (THIN_POOL_OBJ_PREFIX, error);
+    if (!th_pools && (*error)) {
+        /* error is already populated */
+        g_strfreev (lvs);
+        g_strfreev (hid_lvs);
+        return NULL;
+    } else
+        filter_lvs_by_vg (th_pools, vg_name, error);
+    n_th_pools = g_strv_length (th_pools);
+
+    n_all = n_lvs + n_hid_lvs + n_th_pools;
+    if (n_all == 0) {
+        /* no LVs */
+        ret = g_new0 (BDLVMLVdata*, 1);
+        ret[0] = NULL;
+        return ret;
     }
 
     /* now create the return value -- NULL-terminated array of BDLVMLVdata */
-    ret = g_new0 (BDLVMLVdata*, lvs->len + 1);
-    for (i=0; i < lvs->len; i++)
-        ret[i] = (BDLVMLVdata*) g_ptr_array_index (lvs, i);
-    ret[i] = NULL;
+    ret = g_new0 (BDLVMLVdata*, n_all + 1);
 
-    g_ptr_array_free (lvs, FALSE);
+    for (i=0; i < n_lvs; i++, j++) {
+        props = get_object_properties (lvs[i], LV_CMN_INTF, error);
+        if (!props) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+        ret[j] = get_lv_data_from_props (props, error);
+        if (!(ret[j])) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+    }
+    g_strfreev (lvs);
+
+    for (i=0; i < n_hid_lvs; i++, j++) {
+        props = get_object_properties (hid_lvs[i], LV_CMN_INTF, error);
+        if (!props) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+        ret[j] = get_lv_data_from_props (props, error);
+        if (!(ret[j])) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+    }
+    g_strfreev (hid_lvs);
+
+    for (i=0; i < n_th_pools; i++, j++) {
+        props = get_object_properties (th_pools[i], LV_CMN_INTF, error);
+        if (!props) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+        ret[j] = get_lv_data_from_props (props, error);
+        if (!(ret[j])) {
+            g_strfreev (lvs);
+            g_strfreev (hid_lvs);
+            g_strfreev (th_pools);
+            g_free (ret);
+            return NULL;
+        }
+    }
+    g_strfreev (th_pools);
+    ret[j] = NULL;
 
     return ret;
 }
