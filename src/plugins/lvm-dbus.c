@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015  Red Hat, Inc.
+ * Copyright (C) 2015-2016  Red Hat, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -527,15 +527,6 @@ static gchar* call_thpool_method_sync (gchar *vg_name, gchar *pool_name, gchar *
 
     ret = call_lvm_obj_method_sync (obj_id, THPOOL_INTF, method, params, extra_params, error);
     g_free (obj_id);
-
-    return ret;
-}
-
-static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) __attribute__((unused));
-static GVariant* get_vg_property (gchar *vg_name, gchar *property, GError **error) {
-    GVariant *ret = NULL;
-
-    ret = get_lvm_object_property (vg_name, VG_INTF, property, error);
 
     return ret;
 }
