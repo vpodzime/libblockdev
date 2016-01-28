@@ -2265,18 +2265,21 @@ gboolean bd_lvm_cache_attach (gchar *vg_name, gchar *data_lv, gchar *cache_pool_
 gboolean bd_lvm_cache_detach (gchar *vg_name, gchar *cached_lv, gboolean destroy, GError **error) {
     gchar *lv_id = NULL;
     gchar *cache_pool_name = NULL;
+    GVariantBuilder builder;
+    GVariant *params = NULL;
+
+    g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+    g_variant_builder_add_value (&builder, g_variant_new ("b", destroy));
+    params = g_variant_builder_end (&builder);
+    g_variant_builder_clear (&builder);
 
     cache_pool_name = bd_lvm_cache_pool_name (vg_name, cached_lv, error);
     if (!cache_pool_name)
         return FALSE;
     lv_id = g_strdup_printf ("%s/%s", vg_name, cached_lv);
-    call_lvm_obj_method_sync (lv_id, CACHED_LV_INTF, "DetachCachePool", NULL, NULL, error);
-    if ((*error) != NULL)
-        return FALSE;
-    if (destroy)
-        return bd_lvm_lvremove (vg_name, cache_pool_name, TRUE, error);
-    else
-        return TRUE;
+    call_lvm_obj_method_sync (lv_id, CACHED_LV_INTF, "DetachCachePool", params, NULL, error);
+    g_free (lv_id);
+    return ((*error) == NULL)
 }
 
 /**
