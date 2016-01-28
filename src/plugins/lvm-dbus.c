@@ -44,6 +44,7 @@ static gchar *global_config_str = NULL;
 #define LV_OBJ_PREFIX LVM_OBJ_PREFIX"/Lv"
 #define HIDDEN_LV_OBJ_PREFIX LVM_OBJ_PREFIX"/HiddenLv"
 #define THIN_POOL_OBJ_PREFIX LVM_OBJ_PREFIX"/ThinPool"
+#define CACHE_POOL_OBJ_PREFIX LVM_OBJ_PREFIX"/CachePool"
 #define PV_INTF LVM_BUS_NAME".Pv"
 #define VG_INTF LVM_BUS_NAME".Vg"
 #define LV_CMN_INTF LVM_BUS_NAME".LvCommon"
@@ -759,6 +760,7 @@ static BDLVMLVdata* get_lv_data_from_props (GVariant *props, GError **error __at
 
     g_variant_dict_clear (&dict);
     g_variant_unref (vg_name);
+    g_variant_unref (props);
 
     return data;
 }
@@ -1697,37 +1699,38 @@ static gchar* get_lv_vg_name (gchar *lv_obj_path, GError **error) {
     return ret;
 }
 
-static gboolean filter_lvs_by_vg (gchar **lvs, gchar *vg_name, GError **error) {
-    gchar **lv_p = lvs;
-    guint64 offset = 1;
+/**
+ * filter_lvs_by_vg: (skip)
+ *
+ * Filter LVs by VG name and prepend the matching ones to the @out list.
+ */
+static gboolean filter_lvs_by_vg (gchar **lvs, gchar *vg_name, GSList **out, guint64 *n_lvs, GError **error) {
+    gchar **lv_p = NULL;
     gchar *lv_vg_name = NULL;
+    gboolean success = TRUE;
 
     if (!lvs)
         /* nothing to do */
         return TRUE;
 
-    while (*lv_p) {
-        if (**lv_p == '\0') {
-            /* empty place, move the next (+offset) thing here and go on */
-            *lv_p = *(lv_p + offset);
-            *(lv_p + offset) = "";
-        } else {
+    for (lv_p=lvs; *lv_p; lv_p++) {
+        if (vg_name) {
             lv_vg_name = get_lv_vg_name (*lv_p, error);
-            if (!lv_vg_name)
-                return FALSE;
-            if (g_strcmp0 (lv_vg_name, vg_name) != 0) {
-                /* not matching, move the next (+offset) item to this place and
-                   mark its place as empty */
-                *lv_p = *(lv_p + offset);
-                *(lv_p + offset) = "";
-                offset++;
-            } else
-                /* matching, just go on to the next place */
-                lv_p++;
-            g_free (lv_vg_name);
+            if (!lv_vg_name) {
+                g_free (*lv_p);
+                success = FALSE;
+            }
         }
+        if (!vg_name || g_strcmp0 (lv_vg_name, vg_name) == 0) {
+            *out = g_slist_prepend (*out, *lv_p);
+            (*n_lvs)++;
+        } else {
+            g_free (*lv_p);
+            *lv_p = NULL;
+        }
+        g_free (lv_vg_name);
     }
-    return TRUE;
+    return success;
 }
 
 /**
@@ -1741,117 +1744,85 @@ static gboolean filter_lvs_by_vg (gchar **lvs, gchar *vg_name, GError **error) {
 BDLVMLVdata** bd_lvm_lvs (gchar *vg_name, GError **error) {
     gchar **lvs = NULL;
     guint64 n_lvs = 0;
-    gchar **hid_lvs = NULL;
-    guint64 n_hid_lvs = 0;
-    gchar **th_pools = NULL;
-    guint64 n_th_pools = 0;
-    guint64 n_all = 0;
     GVariant *props = NULL;
     BDLVMLVdata **ret = NULL;
-    guint64 i = 0;
     guint64 j = 0;
+    GSList *matched_lvs = NULL;
+    GSList *lv = NULL;
+    gboolean success = FALSE;
 
     lvs = get_existing_objects (LV_OBJ_PREFIX, error);
     if (!lvs && (*error)) {
         /* error is already populated */
         return NULL;
-    } else
-        filter_lvs_by_vg (lvs, vg_name, error);
-    n_lvs = g_strv_length (lvs);
-
-    hid_lvs = get_existing_objects (HIDDEN_LV_OBJ_PREFIX, error);
-    if (!hid_lvs && (*error)) {
-        /* error is already populated */
-        g_strfreev (lvs);
+    }
+    success = filter_lvs_by_vg (lvs, vg_name, &matched_lvs, &n_lvs, error);
+    g_free (lvs);
+    if (!success)
         return NULL;
-    } else
-        filter_lvs_by_vg (hid_lvs, vg_name, error);
-    n_hid_lvs = g_strv_length (hid_lvs);
 
-    th_pools = get_existing_objects (THIN_POOL_OBJ_PREFIX, error);
-    if (!th_pools && (*error)) {
+    lvs = get_existing_objects (THIN_POOL_OBJ_PREFIX, error);
+    if (!lvs && (*error)) {
         /* error is already populated */
-        g_strfreev (lvs);
-        g_strfreev (hid_lvs);
         return NULL;
-    } else
-        filter_lvs_by_vg (th_pools, vg_name, error);
-    n_th_pools = g_strv_length (th_pools);
+    }
+    success = filter_lvs_by_vg (lvs, vg_name, &matched_lvs, &n_lvs, error);
+    g_free (lvs);
+    if (!success)
+        return NULL;
 
-    /* TODO: cache pools */
+    lvs = get_existing_objects (CACHE_POOL_OBJ_PREFIX, error);
+    if (!lvs && (*error)) {
+        /* error is already populated */
+        return NULL;
+    }
+    success = filter_lvs_by_vg (lvs, vg_name, &matched_lvs, &n_lvs, error);
+    g_free (lvs);
+    if (!success)
+        return NULL;
 
-    n_all = n_lvs + n_hid_lvs + n_th_pools;
-    if (n_all == 0) {
+    lvs = get_existing_objects (HIDDEN_LV_OBJ_PREFIX, error);
+    if (!lvs && (*error)) {
+        /* error is already populated */
+        return NULL;
+    }
+    success = filter_lvs_by_vg (lvs, vg_name, &matched_lvs, &n_lvs, error);
+    g_free (lvs);
+    if (!success)
+        return NULL;
+
+    if (n_lvs == 0) {
         /* no LVs */
         ret = g_new0 (BDLVMLVdata*, 1);
         ret[0] = NULL;
         return ret;
     }
 
+    /* we have been prepending to the list so far, but it will be nicer if we
+       reverse it (to get back the original order) */
+    matched_lvs = g_slist_reverse (matched_lvs);
+
     /* now create the return value -- NULL-terminated array of BDLVMLVdata */
-    ret = g_new0 (BDLVMLVdata*, n_all + 1);
+    ret = g_new0 (BDLVMLVdata*, n_lvs + 1);
 
-    for (i=0; i < n_lvs; i++, j++) {
-        props = get_object_properties (lvs[i], LV_CMN_INTF, error);
+    lv = matched_lvs;
+    while (lv) {
+        props = get_object_properties (lv->data, LV_CMN_INTF, error);
         if (!props) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
+            g_slist_free (matched_lvs);
             return NULL;
         }
         ret[j] = get_lv_data_from_props (props, error);
         if (!(ret[j])) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
+            g_slist_free (matched_lvs);
             return NULL;
         }
+        j++;
+        lv = g_slist_next (lv);
     }
-    g_strfreev (lvs);
+    g_slist_free (matched_lvs);
 
-    for (i=0; i < n_hid_lvs; i++, j++) {
-        props = get_object_properties (hid_lvs[i], LV_CMN_INTF, error);
-        if (!props) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
-            return NULL;
-        }
-        ret[j] = get_lv_data_from_props (props, error);
-        if (!(ret[j])) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
-            return NULL;
-        }
-    }
-    g_strfreev (hid_lvs);
-
-    for (i=0; i < n_th_pools; i++, j++) {
-        props = get_object_properties (th_pools[i], LV_CMN_INTF, error);
-        if (!props) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
-            return NULL;
-        }
-        ret[j] = get_lv_data_from_props (props, error);
-        if (!(ret[j])) {
-            g_strfreev (lvs);
-            g_strfreev (hid_lvs);
-            g_strfreev (th_pools);
-            g_free (ret);
-            return NULL;
-        }
-    }
-    g_strfreev (th_pools);
     ret[j] = NULL;
-
     return ret;
 }
 
@@ -2279,7 +2250,7 @@ gboolean bd_lvm_cache_detach (gchar *vg_name, gchar *cached_lv, gboolean destroy
     lv_id = g_strdup_printf ("%s/%s", vg_name, cached_lv);
     call_lvm_obj_method_sync (lv_id, CACHED_LV_INTF, "DetachCachePool", params, NULL, error);
     g_free (lv_id);
-    return ((*error) == NULL)
+    return ((*error) == NULL);
 }
 
 /**
