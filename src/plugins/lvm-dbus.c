@@ -367,9 +367,10 @@ static GVariant* call_lvm_method (gchar *obj, gchar *intf, gchar *method, GVaria
             config = g_variant_new ("s", global_config_str);
             g_variant_builder_add (&extra_builder, "{sv}", "--config", config);
 
-            g_variant_iter_init (&iter, extra_params);
-            while ((param = g_variant_iter_next_value (&iter))) {
-                g_variant_builder_add_value (&extra_builder, param);
+            if (extra_params) {
+                g_variant_iter_init (&iter, extra_params);
+                while ((param = g_variant_iter_next_value (&iter)))
+                    g_variant_builder_add_value (&extra_builder, param);
             }
             config_extra_params = g_variant_builder_end (&extra_builder);
             g_variant_builder_clear (&extra_builder);
