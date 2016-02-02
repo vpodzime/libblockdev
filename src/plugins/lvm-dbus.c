@@ -1846,7 +1846,7 @@ gboolean bd_lvm_thpoolcreate (gchar *vg_name, gchar *lv_name, guint64 size, guin
 
     g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
     g_variant_builder_add_value (&builder, g_variant_new ("s", lv_name));
-    g_variant_builder_add_value (&builder, create_size_str_param (size, "b"));
+    g_variant_builder_add_value (&builder, g_variant_new_uint64 (size));
     g_variant_builder_add_value (&builder, g_variant_new_boolean (TRUE));
     params = g_variant_builder_end (&builder);
     g_variant_builder_clear (&builder);
