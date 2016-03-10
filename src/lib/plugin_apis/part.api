@@ -1,0 +1,32 @@
+#include <glib.h>
+#include <glib-object.h>
+
+#ifndef BD_PART_API
+#define BD_PART_API
+
+#define BD_PART_ERROR bd_part_error_quark ()
+typedef enum {
+    BD_PART_ERROR_EXISTS,
+    BD_PART_ERROR_INVAL,
+    BD_PART_ERROR_FAIL,
+} BDPartError;
+
+typedef enum {
+    BD_PART_TABLE_MSDOS = 0,
+    BD_PART_TABLE_GPT,
+    BD_PART_TABLE_UNDEF
+} BDPartTableType;
+
+/**
+ * bd_part_create_table:
+ * @disk: path of the disk block device to create partition table on
+ * @type: type of the partition table to create
+ * @ignore_existing: whether to ignore/overwrite the existing table or not
+ *                   (reports an error if %FALSE and there's some table on @disk)
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the partition table was successfully created or not
+ */
+gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignore_existing, GError **error);
+
+#endif  /* BD_KBD_API */

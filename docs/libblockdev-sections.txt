@@ -306,7 +306,11 @@ bd_kbd_zram_stats_free
 </SECTION>
 
 <SECTION>
-<FILE>kbd</FILE>
+<FILE>part</FILE>
+BDPartError
+BDPartTableType
+bd_part_create_table
+bd_part_error_quark
 </SECTION>
 
 <SECTION>
