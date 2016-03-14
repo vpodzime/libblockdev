@@ -74,6 +74,26 @@ gboolean init() {
 
 static const char *table_type_str[BD_PART_TABLE_UNDEF] = {"msdos", "gpt"};
 
+static gboolean disk_commit (PedDisk *disk, gchar *path, GError **error) {
+    gint ret = 0;
+
+    ret = ped_disk_commit_to_dev (disk);
+    if (ret == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to commit changes to device '%s'", path);
+        return FALSE;
+    }
+
+    ret = ped_disk_commit_to_os (disk);
+    if (ret == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to inform OS about changes on the '%s' device", path);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 /**
  * bd_part_create_table:
  * @disk: path of the disk block device to create partition table on
@@ -88,7 +108,7 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedDiskType *disk_type = NULL;
-    gint ret = 0;
+    gboolean ret = NULL;
 
     dev = ped_device_get (disk);
     if (!dev) {
@@ -119,25 +139,12 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
         return FALSE;
     }
 
-
-    ret = ped_disk_commit_to_dev (ped_disk);
-    if (ret == 0) {
-        set_parted_error (error, BD_PART_ERROR_FAIL);
-        g_prefix_error (error, "Failed to commit changes to device '%s'", disk);
-        ped_disk_destroy (ped_disk);
-        ped_device_destroy (dev);
-        return FALSE;
-    }
-    ret = ped_disk_commit_to_os (ped_disk);
+    /* commit changes to disk */
+    ret = disk_commit (ped_disk, disk, error);
 
     ped_disk_destroy (ped_disk);
     ped_device_destroy (dev);
 
-    if (ret == 0) {
-        set_parted_error (error, BD_PART_ERROR_FAIL);
-        g_prefix_error (error, "Failed to inform OS about changes on the '%s' device", disk);
-        return FALSE;
-    }
-
-    return TRUE;
+    /* just return what we got (error may be set) */
+    return ret;
 }
