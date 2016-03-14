@@ -19,6 +19,8 @@
 
 #include <string.h>
 #include <parted/parted.h>
+#include <ctype.h>
+#include <stdlib.h>
 
 #include "part.h"
 
@@ -146,5 +148,88 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
     ped_device_destroy (dev);
 
     /* just return what we got (error may be set) */
+    return ret;
+}
+
+/**
+ * bd_part_set_part_flag:
+ * @disk: disk the partition belongs to
+ * @part: partition to set the flag on
+ * @flag: flag to set
+ * @state: state to set for the @flag (%TRUE = enabled)
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the flag @flag was successfully set on the @part partition
+ * or not.
+ */
+gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartPartFlag flag, gboolean state, GError **error) {
+    PedDevice *dev = NULL;
+    PedDisk *ped_disk = NULL;
+    PedPartition *ped_part = NULL;
+    gchar *part_num_str = NULL;
+    gint part_num = 0;
+    gint status = 0;
+    gboolean ret = FALSE;
+
+    if (!part || (part && (*part == '\0'))) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'", part);
+        return FALSE;
+    }
+
+    dev = ped_device_get (disk);
+    if (!dev) {
+        set_parted_error (error, BD_PART_ERROR_INVAL);
+        g_prefix_error (error, "Device '%s' invalid or not existing", disk);
+        return FALSE;
+    }
+
+    ped_disk = ped_disk_new (dev);
+    if (!ped_disk) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to read partition table on device '%s'", disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    part_num_str = part + (strlen (part) - 1);
+    while (isdigit (*part_num_str) || (*part_num_str == '-')) {
+        part_num_str--;
+    }
+    part_num_str++;
+
+    part_num = atoi (part_num_str);
+    if (part_num == 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'. Cannot extract partition number", part);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    ped_part = ped_disk_get_partition (ped_disk, part_num);
+    if (!ped_part) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to get partition '%d' on device '%s'", part_num, disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    status = ped_partition_set_flag (ped_part, (PedPartitionFlag) flag, (int) state);
+    if (status == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to get partition '%d' on device '%s'", part_num, disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    ret = disk_commit (ped_disk, disk, error);
+
+    ped_disk_destroy (ped_disk);
+    ped_device_destroy (dev);
+
     return ret;
 }

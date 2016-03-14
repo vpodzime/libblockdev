@@ -63,3 +63,9 @@ class PartCreateTableCase(PartTestCase):
 
         succ = BlockDev.part_create_table (self.loop_dev, BlockDev.PartTableType.GPT, True)
         self.assertTrue(succ)
+
+class PartSetFlagCase(PartTestCase):
+    def test_set_part_flag(self):
+        """Verify that it is possible to set a partition flag"""
+        # TODO: create partition, set flag, check result, unset flag, check result
+        pass
