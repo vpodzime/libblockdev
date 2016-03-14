@@ -39,25 +39,39 @@ typedef enum {
 } BDPartFlag;
 
 typedef enum {
-    BD_PART_TYPE_NORMAL = 0x00,
-    BD_PART_TYPE_LOGICAL           = 0x01,
-    BD_PART_TYPE_EXTENDED          = 0x02,
-    BD_PART_TYPE_FREESPACE         = 0x04,
-    BD_PART_TYPE_METADATA          = 0x08,
-    BD_PART_TYPE_PROTECTED         = 0x10
+    BD_PART_TYPE_NORMAL    = 0x00,
+    BD_PART_TYPE_LOGICAL   = 0x01,
+    BD_PART_TYPE_EXTENDED  = 0x02,
+    BD_PART_TYPE_FREESPACE = 0x04,
+    BD_PART_TYPE_METADATA  = 0x08,
+    BD_PART_TYPE_PROTECTED = 0x10
 } BDPartType;
 
+typedef enum {
+    BD_PART_TYPE_REQ_NORMAL   = 0x00,
+    BD_PART_TYPE_REQ_LOGICAL  = 0x01,
+    BD_PART_TYPE_REQ_EXTENDED = 0x02,
+    BD_PART_TYPE_REQ_NEXT     = 0x04
+} BDPartTypeReq;
 
-typedef struct BDPartPartSpec {
+typedef enum {
+    BD_PART_ALIGN_MINIMAL,
+    BD_PART_ALIGN_OPTIMAL,
+    BD_PART_ALIGN_NONE
+} BDPartAlign;
+
+typedef struct BDPartSpec {
     gchar *path;
-    BDPartPartType type;
-    
-} BDPartPartSpec;
+    BDPartType type;
+    guint64 start;
+    guint64 size;
+} BDPartSpec;
 
-BDPartPartSpec* bd_part_part_spec_copy (BDPartPartSpec *data);
-void bd_part_part_spec_free (BDPartPartSpec *data);
+BDPartSpec* bd_part_spec_copy (BDPartSpec *data);
+void bd_part_spec_free (BDPartSpec *data);
 
 gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignore_existing, GError **error);
+BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error);
 gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error);
 gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gboolean state, GError **error);
 

@@ -38,6 +38,66 @@ typedef enum {
     BD_PART_FLAG_ESP=18
 } BDPartFlag;
 
+typedef enum {
+    BD_PART_TYPE_NORMAL    = 0x00,
+    BD_PART_TYPE_LOGICAL   = 0x01,
+    BD_PART_TYPE_EXTENDED  = 0x02,
+    BD_PART_TYPE_FREESPACE = 0x04,
+    BD_PART_TYPE_METADATA  = 0x08,
+    BD_PART_TYPE_PROTECTED = 0x10
+} BDPartType;
+
+typedef enum {
+    BD_PART_TYPE_REQ_NORMAL   = 0x00,
+    BD_PART_TYPE_REQ_LOGICAL  = 0x01,
+    BD_PART_TYPE_REQ_EXTENDED = 0x02,
+    BD_PART_TYPE_REQ_NEXT     = 0x04
+} BDPartTypeReq;
+
+typedef enum {
+    BD_PART_ALIGN_MINIMAL,
+    BD_PART_ALIGN_OPTIMAL,
+    BD_PART_ALIGN_NONE
+} BDPartAlign;
+
+#define BD_PART_TYPE_SPEC (bd_part_spec_get_type ())
+GType bd_part_spec_get_type();
+
+typedef struct BDPartSpec {
+    gchar *path;
+    BDPartType type;
+    guint64 start;
+    guint64 size;
+} BDPartSpec;
+
+BDPartSpec* bd_part_spec_copy (BDPartSpec *data) {
+    BDPartSpec *ret = g_new0 (BDPartSpec, 1);
+
+    ret->path = g_strdup (data->path);
+    ret->type = data->type;
+    ret->start = data->start;
+    ret->size = data->size;
+
+    return ret;
+}
+
+void bd_part_spec_free (BDPartSpec *data) {
+    g_free (data->path);
+    g_free (data);
+}
+
+GType bd_part_spec_get_type () {
+    static GType type = 0;
+
+    if (G_UNLIKELY(type == 0)) {
+        type = g_boxed_type_register_static("BDPartSpec",
+                                            (GBoxedCopyFunc) bd_part_spec_copy,
+                                            (GBoxedFreeFunc) bd_part_spec_free);
+    }
+
+    return type;
+}
+
 /**
  * bd_part_create_table:
  * @disk: path of the disk block device to create partition table on
@@ -49,6 +109,24 @@ typedef enum {
  * Returns: whether the partition table was successfully created or not
  */
 gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignore_existing, GError **error);
+
+/**
+ * bd_part_create_part:
+ * @disk: disk to create partition on
+ * @type: type of the partition to create (if %BD_PART_TYPE_REQ_NEXT, the
+ *        partition type will be determined automatically based on the existing
+ *        partitions)
+ * @start: where the partition should start (i.e. offset from the disk start)
+ * @size: desired size of the partition (if 0, a max-sized partition is created)
+ * @align: alignment to use for the partition
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): specification of the created partition or %NULL in case of error
+ *
+ * NOTE: The resulting partition may start at a different position than given by
+ *       @start and can have different size than @size due to alignment.
+ */
+BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error);
 
 /**
  * bd_part_delete_part:

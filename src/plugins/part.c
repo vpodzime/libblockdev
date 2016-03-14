@@ -41,6 +41,22 @@ GQuark bd_part_error_quark (void)
     return g_quark_from_static_string ("g-bd-part-error-quark");
 }
 
+BDPartSpec* bd_part_spec_copy (BDPartSpec *data) {
+    BDPartSpec *ret = g_new0 (BDPartSpec, 1);
+
+    ret->path = g_strdup (data->path);
+    ret->type = data->type;
+    ret->start = data->start;
+    ret->size = data->size;
+
+    return ret;
+}
+
+void bd_part_spec_free (BDPartSpec *data) {
+    g_free (data->path);
+    g_free (data);
+}
+
 /* in order to be thread-safe, we need to make sure every thread has this
    variable for its own use */
 static __thread gchar *error_msg = NULL;
@@ -154,18 +170,97 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
 /**
  * bd_part_create_part:
  * @disk: disk to create partition on
- * @type: type of the partition to create
+ * @type: type of the partition to create (if %BD_PART_TYPE_REQ_NEXT, the
+ *        partition type will be determined automatically based on the existing
+ *        partitions)
  * @start: where the partition should start (i.e. offset from the disk start)
- * @size: desired size of the partition
+ * @size: desired size of the partition (if 0, a max-sized partition is created)
  * @align: alignment to use for the partition
  * @error: (out): place to store error (if any)
  *
- * Returns: specification of the created partition or %NULL in case of error
+ * Returns: (transfer full): specification of the created partition or %NULL in case of error
  *
  * NOTE: The resulting partition may start at a different position than given by
  *       @start and can have different size than @size due to alignment.
  */
+BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error) {
+    PedDevice *dev = NULL;
+    PedDisk *ped_disk = NULL;
+    PedPartition *ped_part = NULL;
+    guint64 end = 0;
+    PedConstraint *constr = NULL;
+    gint status = 0;
+    gboolean succ = FALSE;
+    BDPartSpec *ret = FALSE;
 
+    dev = ped_device_get (disk);
+    if (!dev) {
+        set_parted_error (error, BD_PART_ERROR_INVAL);
+        g_prefix_error (error, "Device '%s' invalid or not existing", disk);
+        return FALSE;
+    }
+
+    ped_disk = ped_disk_new (dev);
+    if (!ped_disk) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to read partition table on device '%s'", disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    /* align and convert start to sectors and determine end*/
+    start = (start + (guint64)dev->sector_size - 1) / dev->sector_size;
+    if (size == 0) {
+        constr = ped_device_get_constraint (dev);
+        size = constr->max_size - 1;
+        ped_constraint_destroy (constr);
+    }
+    end = start + (size / dev->sector_size);
+
+    // XXX: resolve type BD_PART_TYPE_NEXT here
+    ped_part = ped_partition_new (ped_disk, type, NULL, (PedSector)start, (PedSector)end);
+    if (!ped_part) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to create new partition on device '%s'", disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    if (align == BD_PART_ALIGN_OPTIMAL)
+        constr = ped_device_get_optimal_aligned_constraint (dev);
+    else if (align == BD_PART_ALIGN_MINIMAL)
+        constr = ped_device_get_minimal_aligned_constraint (dev);
+    else
+        constr = ped_constraint_exact (&(ped_part->geom));
+
+    status = ped_disk_add_partition (ped_disk, ped_part, constr);
+    if (status == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed add partition to device '%s'", disk);
+        ped_partition_destroy (ped_part);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    succ = disk_commit (ped_disk, disk, error);
+
+    if (succ) {
+        ret = g_new0 (BDPartSpec, 1);
+        ret->path = g_strdup_printf ("%s%d", dev->path, ped_part->num);
+        ret->type = (BDPartType) ped_part->type;
+        ret->start = ped_part->geom.start * dev->sector_size;
+        ret->size = ped_part->geom.length * dev->sector_size;
+    }
+
+    // ped_partition_destroy (ped_part);
+    ped_disk_destroy (ped_disk);
+    ped_device_destroy (dev);
+
+    return ret;
+}
 
 
 /**
