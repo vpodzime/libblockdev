@@ -152,6 +152,23 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
 }
 
 /**
+ * bd_part_create_part:
+ * @disk: disk to create partition on
+ * @type: type of the partition to create
+ * @start: where the partition should start (i.e. offset from the disk start)
+ * @size: desired size of the partition
+ * @align: alignment to use for the partition
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: specification of the created partition or %NULL in case of error
+ *
+ * NOTE: The resulting partition may start at a different position than given by
+ *       @start and can have different size than @size due to alignment.
+ */
+
+
+
+/**
  * bd_part_delete_part:
  * @disk: disk to remove the partition from
  * @part: partition to remove
@@ -242,7 +259,7 @@ gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error) {
  * Returns: whether the flag @flag was successfully set on the @part partition
  * or not.
  */
-gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartPartFlag flag, gboolean state, GError **error) {
+gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gboolean state, GError **error) {
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
