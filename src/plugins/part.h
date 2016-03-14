@@ -39,6 +39,7 @@ typedef enum {
 } BDPartPartFlag;
 
 gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignore_existing, GError **error);
+gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error);
 gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartPartFlag flag, gboolean state, GError **error);
 
 #endif  /* BD_PART */

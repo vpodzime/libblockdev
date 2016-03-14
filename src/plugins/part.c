@@ -152,6 +152,86 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
 }
 
 /**
+ * bd_part_delete_part:
+ * @disk: disk to remove the partition from
+ * @part: partition to remove
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the @part partition was successfully deleted from @disk
+ */
+gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error) {
+    PedDevice *dev = NULL;
+    PedDisk *ped_disk = NULL;
+    PedPartition *ped_part = NULL;
+    gchar *part_num_str = NULL;
+    gint part_num = 0;
+    gint status = 0;
+    gboolean ret = FALSE;
+
+    if (!part || (part && (*part == '\0'))) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'", part);
+        return FALSE;
+    }
+
+    dev = ped_device_get (disk);
+    if (!dev) {
+        set_parted_error (error, BD_PART_ERROR_INVAL);
+        g_prefix_error (error, "Device '%s' invalid or not existing", disk);
+        return FALSE;
+    }
+
+    ped_disk = ped_disk_new (dev);
+    if (!ped_disk) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to read partition table on device '%s'", disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    part_num_str = part + (strlen (part) - 1);
+    while (isdigit (*part_num_str) || (*part_num_str == '-')) {
+        part_num_str--;
+    }
+    part_num_str++;
+
+    part_num = atoi (part_num_str);
+    if (part_num == 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'. Cannot extract partition number", part);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    ped_part = ped_disk_get_partition (ped_disk, part_num);
+    if (!ped_part) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to get partition '%d' on device '%s'", part_num, disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    status = ped_disk_delete_partition (ped_disk, ped_part);
+    if (status == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to get partition '%d' on device '%s'", part_num, disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    ret = disk_commit (ped_disk, disk, error);
+
+    ped_disk_destroy (ped_disk);
+    ped_device_destroy (dev);
+
+    return ret;
+}
+
+/**
  * bd_part_set_part_flag:
  * @disk: disk the partition belongs to
  * @part: partition to set the flag on
@@ -171,6 +251,7 @@ gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartPartFlag flag, g
     gint status = 0;
     gboolean ret = FALSE;
 
+    /* TODO: share this code with the other functions modifying a partition */
     if (!part || (part && (*part == '\0'))) {
         g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
                      "Invalid partition path given: '%s'", part);
