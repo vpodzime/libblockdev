@@ -21,6 +21,7 @@
 #include <parted/parted.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "part.h"
 
@@ -189,6 +190,7 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
     PedPartition *ped_part = NULL;
     guint64 end = 0;
     PedConstraint *constr = NULL;
+    PedPartitionFlag flag = PED_PARTITION_FIRST_FLAG;
     gint status = 0;
     gboolean succ = FALSE;
     BDPartSpec *ret = FALSE;
@@ -253,6 +255,12 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
         ret->type = (BDPartType) ped_part->type;
         ret->start = ped_part->geom.start * dev->sector_size;
         ret->size = ped_part->geom.length * dev->sector_size;
+        for (flag=PED_PARTITION_FIRST_FLAG; flag<PED_PARTITION_LAST_FLAG; flag=ped_partition_flag_next (flag)) {
+            if (ped_partition_is_flag_available (ped_part, flag) && ped_partition_get_flag (ped_part, flag))
+                /* our flags are 1s shifted to the bit determined by parted's flags
+                 * (i.e. 1 << 3 instead of 3, etc.) */
+                ret->flags = ret->flags | (1 << flag);
+        }
     }
 
     // ped_partition_destroy (ped_part);
@@ -358,6 +366,7 @@ gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gbool
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
+    PedPartitionFlag ped_flag = PED_PARTITION_FIRST_FLAG;
     gchar *part_num_str = NULL;
     gint part_num = 0;
     gint status = 0;
@@ -410,7 +419,10 @@ gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gbool
         return FALSE;
     }
 
-    status = ped_partition_set_flag (ped_part, (PedPartitionFlag) flag, (int) state);
+    /* our flags are 1s shifted to the bit determined by parted's flags
+     * (i.e. 1 << 3 instead of 3, etc.) */
+    ped_flag = (PedPartitionFlag) log2 ((double) flag);
+    status = ped_partition_set_flag (ped_part, ped_flag, (int) state);
     if (status == 0) {
         set_parted_error (error, BD_PART_ERROR_FAIL);
         g_prefix_error (error, "Failed to get partition '%d' on device '%s'", part_num, disk);

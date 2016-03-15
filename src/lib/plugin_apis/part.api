@@ -18,24 +18,24 @@ typedef enum {
 } BDPartTableType;
 
 typedef enum {
-    BD_PART_FLAG_BOOT=1,
-    BD_PART_FLAG_ROOT=2,
-    BD_PART_FLAG_SWAP=3,
-    BD_PART_FLAG_HIDDEN=4,
-    BD_PART_FLAG_RAID=5,
-    BD_PART_FLAG_LVM=6,
-    BD_PART_FLAG_LBA=7,
-    BD_PART_FLAG_HPSERVICE=8,
-    BD_PART_FLAG_PALO=9,
-    BD_PART_FLAG_PREP=10,
-    BD_PART_FLAG_MSFT_RESERVED=11,
-    BD_PART_FLAG_BIOS_GRUB=12,
-    BD_PART_FLAG_APPLE_TV_RECOVERY=13,
-    BD_PART_FLAG_DIAG=14,
-    BD_PART_FLAG_LEGACY_BOOT=15,
-    BD_PART_FLAG_MSFT_DATA=16,
-    BD_PART_FLAG_IRST=17,
-    BD_PART_FLAG_ESP=18
+    BD_PART_FLAG_BOOT = 1 << 1,
+    BD_PART_FLAG_ROOT = 1 << 2,
+    BD_PART_FLAG_SWAP = 1 << 3,
+    BD_PART_FLAG_HIDDEN = 1 << 4,
+    BD_PART_FLAG_RAID = 1 << 5,
+    BD_PART_FLAG_LVM = 1 << 6,
+    BD_PART_FLAG_LBA = 1 << 7,
+    BD_PART_FLAG_HPSERVICE = 1 << 8,
+    BD_PART_FLAG_CPALO = 1 << 9,
+    BD_PART_FLAG_PREP = 1 << 10,
+    BD_PART_FLAG_MSFT_RESERVED = 1 << 11,
+    BD_PART_FLAG_BIOS_GRUB = 1 << 12,
+    BD_PART_FLAG_APPLE_TV_RECOVERY = 1 << 13,
+    BD_PART_FLAG_DIAG = 1 << 14,
+    BD_PART_FLAG_LEGACY_BOOT = 1 << 15,
+    BD_PART_FLAG_MSFT_DATA = 1 << 16,
+    BD_PART_FLAG_IRST = 1 << 17,
+    BD_PART_FLAG_ESP = 1 << 18
 } BDPartFlag;
 
 typedef enum {
@@ -68,6 +68,7 @@ typedef struct BDPartSpec {
     BDPartType type;
     guint64 start;
     guint64 size;
+    gint flags;
 } BDPartSpec;
 
 BDPartSpec* bd_part_spec_copy (BDPartSpec *data) {
