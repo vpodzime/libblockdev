@@ -257,7 +257,7 @@ BDPartSpec* bd_part_get_part_spec (gchar *disk, gchar *part, GError **error) {
 
     ret = get_part_spec (dev, ped_part);
 
-    /* the partition gets destroyed together with the disk*/
+    /* the partition gets destroyed together with the disk */
     ped_disk_destroy (ped_disk);
     ped_device_destroy (dev);
 
@@ -320,6 +320,46 @@ BDPartSpec** bd_part_get_disk_parts (gchar *disk, GError **error) {
     return ret;
 }
 
+static PedPartition* add_part_to_disk (PedDevice *dev, PedDisk *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error) {
+    PedPartition *part = NULL;
+    PedConstraint *constr = NULL;
+    guint64 end = 0;
+    gint status = 0;
+
+    /* align and convert start to sectors and determine end */
+    start = (start + (guint64)dev->sector_size - 1) / dev->sector_size;
+    if (size == 0) {
+        constr = ped_device_get_constraint (dev);
+        end = constr->max_size - 1;
+        ped_constraint_destroy (constr);
+    } else
+        end = start + (size / dev->sector_size);
+
+    part = ped_partition_new (disk, type, NULL, (PedSector)start, (PedSector)end);
+    if (!part) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to create new partition on device '%s'", dev->path);
+        return NULL;
+    }
+
+    if (align == BD_PART_ALIGN_OPTIMAL)
+        constr = ped_device_get_optimal_aligned_constraint (dev);
+    else if (align == BD_PART_ALIGN_MINIMAL)
+        constr = ped_device_get_minimal_aligned_constraint (dev);
+    else
+        constr = ped_constraint_exact (&(part->geom));
+
+    status = ped_disk_add_partition (disk, part, constr);
+    if (status == 0) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed add partition to device '%s'", dev->path);
+        ped_partition_destroy (part);
+        return NULL;
+    }
+
+    return part;
+}
+
 /**
  * bd_part_create_part:
  * @disk: disk to create partition on
@@ -340,9 +380,8 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
-    guint64 end = 0;
-    PedConstraint *constr = NULL;
-    gint status = 0;
+    PedPartition *ext_part = NULL;
+    PedSector start_sector = 0;
     gboolean succ = FALSE;
     BDPartSpec *ret = NULL;
 
@@ -350,7 +389,7 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
     if (!dev) {
         set_parted_error (error, BD_PART_ERROR_INVAL);
         g_prefix_error (error, "Device '%s' invalid or not existing", disk);
-        return FALSE;
+        return NULL;
     }
 
     ped_disk = ped_disk_new (dev);
@@ -359,47 +398,39 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
         g_prefix_error (error, "Failed to read partition table on device '%s'", disk);
         ped_disk_destroy (ped_disk);
         ped_device_destroy (dev);
-        return FALSE;
+        return NULL;
     }
 
-    /* align and convert start to sectors and determine end*/
-    start = (start + (guint64)dev->sector_size - 1) / dev->sector_size;
-    if (size == 0) {
-        constr = ped_device_get_constraint (dev);
-        size = constr->max_size - 1;
-        ped_constraint_destroy (constr);
+    if (type == BD_PART_TYPE_REQ_NEXT) {
+        ext_part = ped_disk_extended_partition (ped_disk);
+        start_sector = (PedSector) (start + dev->sector_size - 1) / dev->sector_size;
+        if (ext_part && (start_sector > ext_part->geom.start) && (start_sector < ext_part->geom.end)) {
+            /* partition's start is in the extended partition -> must be logical */
+            type = BD_PART_TYPE_REQ_LOGICAL;
+        } else if ((ped_disk_get_max_primary_partition_count (ped_disk) - 1 > ped_disk_get_primary_partition_count (ped_disk)) || ext_part) {
+            /* we have room for another primary partition or there already is an extended partition -> should/must be primary */
+            type = BD_PART_TYPE_REQ_NORMAL;
+        } else {
+            ped_part = add_part_to_disk (dev, ped_disk, BD_PART_TYPE_REQ_EXTENDED, start, 0, align, error);
+            if (!ped_part) {
+                /* error is already populated */
+                ped_disk_destroy (ped_disk);
+                ped_device_destroy (dev);
+                return NULL;
+            }
+            type = BD_PART_TYPE_REQ_LOGICAL;
+        }
     }
-    end = start + (size / dev->sector_size);
 
-    // XXX: resolve type BD_PART_TYPE_NEXT here
-    ped_part = ped_partition_new (ped_disk, type, NULL, (PedSector)start, (PedSector)end);
+    ped_part = add_part_to_disk (dev, ped_disk, type, start, size, align, error);
     if (!ped_part) {
-        set_parted_error (error, BD_PART_ERROR_FAIL);
-        g_prefix_error (error, "Failed to create new partition on device '%s'", disk);
+        /* error is already populated */
         ped_disk_destroy (ped_disk);
         ped_device_destroy (dev);
-        return FALSE;
-    }
-
-    if (align == BD_PART_ALIGN_OPTIMAL)
-        constr = ped_device_get_optimal_aligned_constraint (dev);
-    else if (align == BD_PART_ALIGN_MINIMAL)
-        constr = ped_device_get_minimal_aligned_constraint (dev);
-    else
-        constr = ped_constraint_exact (&(ped_part->geom));
-
-    status = ped_disk_add_partition (ped_disk, ped_part, constr);
-    if (status == 0) {
-        set_parted_error (error, BD_PART_ERROR_FAIL);
-        g_prefix_error (error, "Failed add partition to device '%s'", disk);
-        ped_partition_destroy (ped_part);
-        ped_disk_destroy (ped_disk);
-        ped_device_destroy (dev);
-        return FALSE;
+        return NULL;
     }
 
     succ = disk_commit (ped_disk, disk, error);
-
     if (succ)
         ret = get_part_spec (dev, ped_part);
 
