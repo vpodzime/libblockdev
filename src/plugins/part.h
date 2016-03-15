@@ -72,6 +72,7 @@ BDPartSpec* bd_part_spec_copy (BDPartSpec *data);
 void bd_part_spec_free (BDPartSpec *data);
 
 gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignore_existing, GError **error);
+BDPartSpec* bd_part_get_part_spec (gchar *disk, gchar *part, GError **error);
 BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error);
 gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error);
 gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gboolean state, GError **error);
