@@ -183,7 +183,7 @@ static BDPartSpec* get_part_spec (PedDevice *dev, PedPartition *part) {
     ret->size = part->geom.length * dev->sector_size;
     for (flag=PED_PARTITION_FIRST_FLAG; flag<PED_PARTITION_LAST_FLAG; flag=ped_partition_flag_next (flag)) {
         /* beware of partition types that segfault when asked for flags */
-        if ((part->type < PED_PARTITION_EXTENDED) &&
+        if ((part->type <= PED_PARTITION_EXTENDED) &&
             ped_partition_is_flag_available (part, flag) && ped_partition_get_flag (part, flag))
             /* our flags are 1s shifted to the bit determined by parted's flags
              * (i.e. 1 << 3 instead of 3, etc.) */
@@ -298,7 +298,7 @@ BDPartSpec** bd_part_get_disk_parts (gchar *disk, GError **error) {
     /* count the partitions we care about (ignoring FREESPACE, METADATA and PROTECTED */
     ped_part = ped_disk_next_partition (ped_disk, NULL);
     while (ped_part) {
-        if (ped_part->type < PED_PARTITION_EXTENDED)
+        if (ped_part->type <= PED_PARTITION_EXTENDED)
             num_parts++;
         ped_part = ped_disk_next_partition (ped_disk, ped_part);
     }
@@ -308,7 +308,7 @@ BDPartSpec** bd_part_get_disk_parts (gchar *disk, GError **error) {
     ped_part = ped_disk_next_partition (ped_disk, NULL);
     while (ped_part) {
         /* only include partitions we care about */
-        if (ped_part->type < PED_PARTITION_EXTENDED)
+        if (ped_part->type <= PED_PARTITION_EXTENDED)
             ret[i++] = get_part_spec (dev, ped_part);
         ped_part = ped_disk_next_partition (ped_disk, ped_part);
     }
