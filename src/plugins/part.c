@@ -174,7 +174,10 @@ static BDPartSpec* get_part_spec (PedDevice *dev, PedPartition *part) {
     PedPartitionFlag flag = PED_PARTITION_FIRST_FLAG;
 
     ret = g_new0 (BDPartSpec, 1);
-    ret->path = g_strdup_printf ("%s%d", dev->path, part->num);
+    if (isdigit (dev->path[strlen(dev->path) - 1]))
+        ret->path = g_strdup_printf ("%sp%d", dev->path, part->num);
+    else
+        ret->path = g_strdup_printf ("%s%d", dev->path, part->num);
     ret->type = (BDPartType) part->type;
     ret->start = part->geom.start * dev->sector_size;
     ret->size = part->geom.length * dev->sector_size;
