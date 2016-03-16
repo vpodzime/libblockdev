@@ -182,7 +182,9 @@ static BDPartSpec* get_part_spec (PedDevice *dev, PedPartition *part) {
     ret->start = part->geom.start * dev->sector_size;
     ret->size = part->geom.length * dev->sector_size;
     for (flag=PED_PARTITION_FIRST_FLAG; flag<PED_PARTITION_LAST_FLAG; flag=ped_partition_flag_next (flag)) {
-        if (ped_partition_is_flag_available (part, flag) && ped_partition_get_flag (part, flag))
+        /* beware of partition types that segfault when asked for flags */
+        if ((part->type < PED_PARTITION_EXTENDED) &&
+            ped_partition_is_flag_available (part, flag) && ped_partition_get_flag (part, flag))
             /* our flags are 1s shifted to the bit determined by parted's flags
              * (i.e. 1 << 3 instead of 3, etc.) */
             ret->flags = ret->flags | (1 << flag);
@@ -256,6 +258,62 @@ BDPartSpec* bd_part_get_part_spec (gchar *disk, gchar *part, GError **error) {
     ret = get_part_spec (dev, ped_part);
 
     /* the partition gets destroyed together with the disk*/
+    ped_disk_destroy (ped_disk);
+    ped_device_destroy (dev);
+
+    return ret;
+}
+
+/**
+ * bd_part_get_disk_parts:
+ * @disk: disk to get information about partitions for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full) (array zero-terminated=1): specs of the partitions from @disk or %NULL in case of error
+ */
+BDPartSpec** bd_part_get_disk_parts (gchar *disk, GError **error) {
+    PedDevice *dev = NULL;
+    PedDisk *ped_disk = NULL;
+    PedPartition *ped_part = NULL;
+    guint num_parts = 0;
+    BDPartSpec **ret = NULL;
+    guint i = 0;
+
+    dev = ped_device_get (disk);
+    if (!dev) {
+        set_parted_error (error, BD_PART_ERROR_INVAL);
+        g_prefix_error (error, "Device '%s' invalid or not existing", disk);
+        return FALSE;
+    }
+
+    ped_disk = ped_disk_new (dev);
+    if (!ped_disk) {
+        set_parted_error (error, BD_PART_ERROR_FAIL);
+        g_prefix_error (error, "Failed to read partition table on device '%s'", disk);
+        ped_disk_destroy (ped_disk);
+        ped_device_destroy (dev);
+        return FALSE;
+    }
+
+    /* count the partitions we care about (ignoring FREESPACE, METADATA and PROTECTED */
+    ped_part = ped_disk_next_partition (ped_disk, NULL);
+    while (ped_part) {
+        if (ped_part->type < PED_PARTITION_EXTENDED)
+            num_parts++;
+        ped_part = ped_disk_next_partition (ped_disk, ped_part);
+    }
+
+    ret = g_new0 (BDPartSpec*, num_parts + 1);
+    i = 0;
+    ped_part = ped_disk_next_partition (ped_disk, NULL);
+    while (ped_part) {
+        /* only include partitions we care about */
+        if (ped_part->type < PED_PARTITION_EXTENDED)
+            ret[i++] = get_part_spec (dev, ped_part);
+        ped_part = ped_disk_next_partition (ped_disk, ped_part);
+    }
+    ret[i] = NULL;
+
     ped_disk_destroy (ped_disk);
     ped_device_destroy (dev);
 

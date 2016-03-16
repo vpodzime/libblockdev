@@ -122,6 +122,15 @@ gboolean bd_part_create_table (gchar *disk, BDPartTableType type, gboolean ignor
 BDPartSpec* bd_part_get_part_spec (gchar *disk, gchar *part, GError **error);
 
 /**
+ * bd_part_get_disk_parts:
+ * @disk: disk to get information about partitions for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full) (array zero-terminated=1): specs of the partitions from @disk or %NULL in case of error
+ */
+BDPartSpec** bd_part_get_disk_parts (gchar *disk, GError **error);
+
+/**
  * bd_part_create_part:
  * @disk: disk to create partition on
  * @type: type of the partition to create (if %BD_PART_TYPE_REQ_NEXT, the
