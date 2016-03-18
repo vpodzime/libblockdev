@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sizes.h>
 
 #include "part.h"
 
@@ -382,6 +383,7 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
     PedPartition *ped_part = NULL;
     PedPartition *ext_part = NULL;
     PedSector start_sector = 0;
+    gint last_num = 0;
     gboolean succ = FALSE;
     BDPartSpec *ret = NULL;
 
@@ -420,6 +422,25 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
             }
             type = BD_PART_TYPE_REQ_LOGICAL;
         }
+    }
+
+    if (type == BD_PART_TYPE_REQ_LOGICAL) {
+        /* Find the previous logical partition (if there's any) because we need
+           its end. If there's no such logical partition, we are creating the
+           first one and thus should only care about the extended partition's
+           start*/
+        last_num = ped_disk_get_last_partition_num (ped_disk);
+        ped_part = ped_disk_get_partition (ped_disk, last_num);
+        while (ped_part && (ped_part->type != PED_PARTITION_EXTENDED) &&
+               (ped_part->geom.start > (PedSector) (start / dev->sector_size)))
+            ped_part = ped_part->prev;
+
+        if (ped_part->type == PED_PARTITION_EXTENDED)
+            /* start where the first logical partition can start - the start of the extended partition + 1 MiB aligned up */
+            start = (ped_part->geom.start * dev->sector_size) + 1 MiB + dev->sector_size - 1;
+        else
+            /* start where the next logical partition can start - the end of the previous partition + 1 MiB aligned up */
+            start = (ped_part->geom.end * dev->sector_size) + 1 MiB + dev->sector_size - 1;
     }
 
     ped_part = add_part_to_disk (dev, ped_disk, type, start, size, align, error);

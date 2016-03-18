@@ -239,13 +239,13 @@ class PartCreatePartFullCase(PartTestCase):
         self.assertEqual(ps2.flags, 0)  # no flags (combination of bit flags)
 
         ps3 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.EXTENDED, ps2.start + ps2.size + 1,
-                                         20 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+                                         30 * 1024**2, BlockDev.PartAlign.OPTIMAL)
         self.assertTrue(ps3)
         self.assertEqual(ps3.path, self.loop_dev + "p3")
         self.assertEqual(ps3.type, BlockDev.PartType.EXTENDED)
         # the start has to be less than a sector far from the requested start
         self.assertTrue(abs(ps3.start - (ps2.start + ps2.size + 1)) < 512)
-        self.assertEqual(ps3.size, 20 * 1024**2)
+        self.assertEqual(ps3.size, 30 * 1024**2)
         self.assertEqual(ps3.flags, 0)  # no flags (combination of bit flags)
 
         # the logical partition has number 5 even though the extended partition
@@ -269,7 +269,7 @@ class PartCreatePartFullCase(PartTestCase):
         # the start has to be somewhere in the extended partition p3 which
         # should need at most 2 MiB extra space
         self.assertTrue(ps3.start < ps6.start < ps3.start + ps3.size)
-        self.assertTrue(abs(ps6.size - 10 * 1024**2) < 2 * 1024**2)
+        self.assertEqual(ps6.size, 10 * 1024**2)
         self.assertEqual(ps6.flags, 0)  # no flags (combination of bit flags)
 
         # here we go with the partition number 4
@@ -338,8 +338,9 @@ class PartCreatePartFullCase(PartTestCase):
         self.assertTrue(ps5)
         self.assertEqual(ps5.path, self.loop_dev + "p5")
         self.assertEqual(ps5.type, BlockDev.PartType.LOGICAL)
-        # the start has to be somewhere in the extended partition p4
-        self.assertTrue(ps4.start < ps5.start < ps4.start + ps4.size)
+        # the start has to be somewhere in the extended partition p4 no more
+        # than 2 MiB after its start
+        self.assertLess(ps5.start, ps4.start + 2*1024**2)
         self.assertEqual(ps5.size, 10 * 1024**2)
         self.assertEqual(ps5.flags, 0)  # no flags (combination of bit flags)
 
@@ -348,14 +349,25 @@ class PartCreatePartFullCase(PartTestCase):
         self.assertTrue(ps6)
         self.assertEqual(ps6.path, self.loop_dev + "p6")
         self.assertEqual(ps6.type, BlockDev.PartType.LOGICAL)
-        self.assertTrue(abs(ps6.start - (ps5.start + ps5.size + 1)) < 512)
+        # logical partitions start 1 MiB after each other (no idea why)
+        self.assertLess(abs(ps6.start - (ps5.start + ps5.size + 1)), 1024**2 + 512)
         self.assertEqual(ps6.size, 10 * 1024**2)
         self.assertEqual(ps6.flags, 0)  # no flags (combination of bit flags)
+
+        ps7 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps6.start + ps6.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps7)
+        self.assertEqual(ps7.path, self.loop_dev + "p7")
+        self.assertEqual(ps7.type, BlockDev.PartType.LOGICAL)
+        # logical partitions start 1 MiB after each other (no idea why)
+        self.assertLess(abs(ps7.start - (ps6.start + ps6.size + 1)), 1024**2 + 512)
+        self.assertEqual(ps7.size, 10 * 1024**2)
+        self.assertEqual(ps7.flags, 0)  # no flags (combination of bit flags)
 
         # no more primary nor extended partitions allowed in the MSDOS table and
         # there should be no space
         with self.assertRaises(GLib.GError):
-            BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.PRIMARY, ps4.start + ps4.size + 1,
+            BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NORMAL, ps4.start + ps4.size + 1,
                                        10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
         with self.assertRaises(GLib.GError):
             BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.EXTENDED, ps4.start + ps4.size + 1,
