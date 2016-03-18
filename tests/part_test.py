@@ -288,6 +288,52 @@ class PartCreatePartFullCase(PartTestCase):
             BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.EXTENDED, ps3.start + ps3.size + 1,
                                        10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
 
+    def test_create_part_with_extended_logical_gpt(self):
+        """Verify that partition creation works as expected with primary, extended and logical parts on GPT"""
+
+        # we first need a partition table
+        succ = BlockDev.part_create_table (self.loop_dev, BlockDev.PartTableType.GPT, True)
+        self.assertTrue(succ)
+
+        # for now, let's just create a typical primary partition starting at the
+        # sector 2048, 10 MiB big with optimal alignment
+        ps = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NORMAL, 2048*512, 10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps)
+        self.assertEqual(ps.path, self.loop_dev + "p1")
+        self.assertEqual(ps.type, BlockDev.PartType.NORMAL)
+        self.assertEqual(ps.start, 2048 * 512)
+        self.assertEqual(ps.size, 10 * 1024**2)
+        self.assertEqual(ps.flags, 0)  # no flags (combination of bit flags)
+
+        ps2 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NORMAL, ps.start + ps.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps2)
+        self.assertEqual(ps2.path, self.loop_dev + "p2")
+        self.assertEqual(ps2.type, BlockDev.PartType.NORMAL)
+        # the start has to be less than a sector far from the requested start
+        self.assertTrue(abs(ps2.start - (ps.start + ps.size + 1)) < 512)
+        self.assertEqual(ps2.size, 10 * 1024**2)
+        self.assertEqual(ps2.flags, 0)  # no flags (combination of bit flags)
+
+        ps3 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NORMAL, ps2.start + ps2.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps3)
+        self.assertEqual(ps3.path, self.loop_dev + "p3")
+        self.assertEqual(ps3.type, BlockDev.PartType.NORMAL)
+        # the start has to be less than a sector far from the requested start
+        self.assertTrue(abs(ps3.start - (ps2.start + ps2.size + 1)) < 512)
+        self.assertEqual(ps3.size, 10 * 1024**2)
+        self.assertEqual(ps3.flags, 0)  # no flags (combination of bit flags)
+
+        # no extended partitions allowed in the GPT table
+        with self.assertRaises(GLib.GError):
+            BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.EXTENDED, ps3.start + ps3.size + 1,
+                                       10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        # no logical partitions allowed in the GPT table
+        with self.assertRaises(GLib.GError):
+            BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.LOGICAL, ps3.start + ps3.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+
     def test_create_part_next(self):
         """Verify that partition creation works as expected with the NEXT (auto) type"""
 
@@ -373,6 +419,70 @@ class PartCreatePartFullCase(PartTestCase):
             BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.EXTENDED, ps4.start + ps4.size + 1,
                                        10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
 
+    def test_create_part_next_gpt(self):
+        """Verify that partition creation works as expected with the NEXT (auto) type on GPT"""
+
+        # we first need a partition table
+        succ = BlockDev.part_create_table (self.loop_dev, BlockDev.PartTableType.GPT, True)
+        self.assertTrue(succ)
+
+        # for now, let's just create a typical primary partition starting at the
+        # sector 2048, 10 MiB big with optimal alignment
+        ps = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, 2048*512, 10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps)
+        self.assertEqual(ps.path, self.loop_dev + "p1")
+        self.assertEqual(ps.type, BlockDev.PartType.NORMAL)
+        self.assertEqual(ps.start, 2048 * 512)
+        self.assertEqual(ps.size, 10 * 1024**2)
+        self.assertEqual(ps.flags, 0)  # no flags (combination of bit flags)
+
+        ps2 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps.start + ps.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps2)
+        self.assertEqual(ps2.path, self.loop_dev + "p2")
+        self.assertEqual(ps2.type, BlockDev.PartType.NORMAL)
+        # the start has to be less than a sector far from the requested start
+        self.assertTrue(abs(ps2.start - (ps.start + ps.size + 1)) < 512)
+        self.assertEqual(ps2.size, 10 * 1024**2)
+        self.assertEqual(ps2.flags, 0)  # no flags (combination of bit flags)
+
+        ps3 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps2.start + ps2.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps3)
+        self.assertEqual(ps3.path, self.loop_dev + "p3")
+        self.assertEqual(ps3.type, BlockDev.PartType.NORMAL)
+        # the start has to be less than a sector far from the requested start
+        self.assertTrue(abs(ps3.start - (ps2.start + ps2.size + 1)) < 512)
+        self.assertEqual(ps3.size, 10 * 1024**2)
+        self.assertEqual(ps3.flags, 0)  # no flags (combination of bit flags)
+
+        # we should get just next primary partition (GPT)
+        ps4 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps3.start + ps3.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps4)
+        self.assertEqual(ps4.path, self.loop_dev + "p4")
+        self.assertEqual(ps4.type, BlockDev.PartType.NORMAL)
+        self.assertTrue(abs(ps4.start - (ps3.start + ps3.size + 1)) < 512)
+        self.assertEqual(ps4.size, 10 * 1024**2)
+
+        # we should get just next primary partition (GPT)
+        ps5 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps4.start + ps4.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps5)
+        self.assertEqual(ps5.path, self.loop_dev + "p5")
+        self.assertEqual(ps5.type, BlockDev.PartType.NORMAL)
+        self.assertTrue(abs(ps5.start - (ps4.start + ps4.size + 1)) < 512)
+        self.assertEqual(ps5.size, 10 * 1024**2)
+
+        # we should get just next primary partition (GPT)
+        ps6 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NEXT, ps5.start + ps4.size + 1,
+                                         10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps6)
+        self.assertEqual(ps6.path, self.loop_dev + "p6")
+        self.assertEqual(ps6.type, BlockDev.PartType.NORMAL)
+        self.assertTrue(abs(ps6.start - (ps5.start + ps5.size + 1)) < 512)
+        self.assertEqual(ps6.size, 10 * 1024**2)
+
 class PartCreateDeletePartCase(PartTestCase):
     def test_create_delete_part_simple(self):
         """Verify that it is possible to create and delete a parition"""
@@ -428,3 +538,9 @@ class PartSetFlagCase(PartTestCase):
         ps = BlockDev.part_get_part_spec (self.loop_dev, ps.path)
         self.assertTrue(ps.flags & BlockDev.PartFlag.BOOT)
         self.assertTrue(ps.flags & BlockDev.PartFlag.LVM)
+
+        # SWAP label not supported on the MSDOS table
+        with self.assertRaises(GLib.GError):
+            BlockDev.part_set_part_flag (self.loop_dev, ps.path, BlockDev.PartFlag.SWAP, True)
+        with self.assertRaises(GLib.GError):
+            BlockDev.part_set_part_flag (self.loop_dev, ps.path, BlockDev.PartFlag.SWAP, False)
