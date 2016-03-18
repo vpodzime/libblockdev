@@ -171,4 +171,31 @@ gboolean bd_part_delete_part (gchar *disk, gchar *part, GError **error);
  */
 gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gboolean state, GError **error);
 
+/**
+ * bd_part_get_part_table_type_str:
+ * @type: table type to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @table_type
+ */
+const gchar* bd_part_get_part_table_type_str (BDPartTableType type, GError **error);
+
+/**
+ * bd_part_get_flag_str:
+ * @flag: flag to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @flag
+ */
+const gchar* bd_part_get_flag_str (BDPartFlag flag, GError **error);
+
+/**
+ * bd_part_get_type_str:
+ * @type: type to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @type
+ */
+const gchar* bd_part_get_type_str (BDPartType type, GError **error);
+
 #endif  /* BD_KBD_API */

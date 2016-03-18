@@ -92,7 +92,7 @@ gboolean init() {
     return TRUE;
 }
 
-static const char *table_type_str[BD_PART_TABLE_UNDEF] = {"msdos", "gpt"};
+static const gchar *table_type_str[BD_PART_TABLE_UNDEF] = {"msdos", "gpt"};
 
 static gboolean disk_commit (PedDisk *disk, gchar *path, GError **error) {
     gint ret = 0;
@@ -628,4 +628,53 @@ gboolean bd_part_set_part_flag (gchar *disk, gchar *part, BDPartFlag flag, gbool
     ped_device_destroy (dev);
 
     return ret;
+}
+
+/**
+ * bd_part_get_part_table_type_str:
+ * @type: table type to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @table_type
+ */
+const gchar* bd_part_get_part_table_type_str (BDPartTableType type, GError **error) {
+    if (type >= BD_PART_TABLE_UNDEF) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition table type given");
+        return NULL;
+    }
+
+    return table_type_str[type];
+}
+
+/**
+ * bd_part_get_flag_str:
+ * @flag: flag to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @flag
+ */
+const gchar* bd_part_get_flag_str (BDPartFlag flag, GError **error) {
+    if (flag > BD_PART_FLAG_ESP) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL, "Invalid flag given");
+        return NULL;
+    }
+
+    return ped_partition_flag_get_name ((PedPartitionFlag) log2 ((double) flag));
+}
+
+/**
+ * bd_part_get_type_str:
+ * @type: type to get string representation for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer none): string representation of @type
+ */
+const gchar* bd_part_get_type_str (BDPartType type, GError **error) {
+    if (type > BD_PART_TYPE_PROTECTED) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL, "Invalid partition type given");
+        return NULL;
+    }
+
+    return ped_partition_type_get_name ((PedPartitionType) type);
 }
