@@ -435,12 +435,15 @@ BDPartSpec* bd_part_create_part (gchar *disk, BDPartTypeReq type, guint64 start,
                (ped_part->geom.start > (PedSector) (start / dev->sector_size)))
             ped_part = ped_part->prev;
 
-        if (ped_part->type == PED_PARTITION_EXTENDED)
-            /* start where the first logical partition can start - the start of the extended partition + 1 MiB aligned up */
-            start = (ped_part->geom.start * dev->sector_size) + 1 MiB + dev->sector_size - 1;
-        else
-            /* start where the next logical partition can start - the end of the previous partition + 1 MiB aligned up */
-            start = (ped_part->geom.end * dev->sector_size) + 1 MiB + dev->sector_size - 1;
+        if (ped_part->type == PED_PARTITION_EXTENDED) {
+            /* can at minimal start where the first logical partition can start - the start of the extended partition + 1 MiB aligned up */
+            if (start < ((ped_part->geom.start * dev->sector_size) + 1 MiB + dev->sector_size - 1))
+                start = (ped_part->geom.start * dev->sector_size) + 1 MiB + dev->sector_size - 1;
+        } else {
+            /* can at minimal start where the next logical partition can start - the end of the previous partition + 1 MiB aligned up */
+            if (start < ((ped_part->geom.end * dev->sector_size) + 1 MiB + dev->sector_size - 1))
+                start = (ped_part->geom.end * dev->sector_size) + 1 MiB + dev->sector_size - 1;
+        }
     }
 
     ped_part = add_part_to_disk (dev, ped_disk, type, start, size, align, error);

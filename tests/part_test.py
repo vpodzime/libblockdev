@@ -272,6 +272,18 @@ class PartCreatePartFullCase(PartTestCase):
         self.assertEqual(ps6.size, 10 * 1024**2)
         self.assertEqual(ps6.flags, 0)  # no flags (combination of bit flags)
 
+        ps7 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.LOGICAL, ps6.start + ps6.size + 2 * 1024**2,
+                                         5 * 1024**2, BlockDev.PartAlign.OPTIMAL)
+        self.assertTrue(ps7)
+        self.assertEqual(ps7.path, self.loop_dev + "p7")
+        self.assertEqual(ps7.type, BlockDev.PartType.LOGICAL)
+        # the start has to be somewhere in the extended partition p3 which
+        # should need at most 2 MiB extra space
+        self.assertTrue(ps3.start < ps7.start < ps3.start + ps3.size)
+        self.assertLess(abs(ps7.start - (ps6.start + ps6.size + 2 * 1024**2)), 512)
+        self.assertEqual(ps7.size, 5 * 1024**2)
+        self.assertEqual(ps7.flags, 0)  # no flags (combination of bit flags)
+
         # here we go with the partition number 4
         ps4 = BlockDev.part_create_part (self.loop_dev, BlockDev.PartTypeReq.NORMAL, ps3.start + ps3.size + 1,
                                          10 * 1024**2, BlockDev.PartAlign.OPTIMAL)
