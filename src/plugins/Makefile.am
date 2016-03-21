@@ -1,4 +1,5 @@
-lib_LTLIBRARIES = libbd_btrfs.la libbd_crypto.la libbd_dm.la libbd_loop.la libbd_lvm.la libbd_lvm-dbus.la libbd_mdraid.la libbd_mpath.la libbd_swap.la libbd_kbd.la
+lib_LTLIBRARIES = libbd_btrfs.la libbd_crypto.la libbd_dm.la libbd_loop.la libbd_lvm.la libbd_lvm-dbus.la \
+                  libbd_mdraid.la libbd_mpath.la libbd_swap.la libbd_kbd.la libbd_fs.la
 
 if ON_S390
 lib_LTLIBRARIES += libbd_s390.la
@@ -73,6 +74,11 @@ libbd_s390_la_CPPFLAGS = -I${srcdir}/../utils/
 libbd_s390_la_SOURCES = s390.c s390.h
 endif
 
+libbd_fs_la_CFLAGS = $(GLIB_CFLAGS) $(BLKID_CFLAGS) -Wall -Wextra -Werror
+libbd_fs_la_LIBADD = $(GLIB_LIBS) $(BLKID_LIBS) ${builddir}/../utils/libbd_utils.la
+libbd_fs_la_LDFLAGS = -L${srcdir}/../utils/ -version-info 0:1:0
+libbd_fs_la_CPPFLAGS = -I${srcdir}/../utils/
+libbd_fs_la_SOURCES = fs.c fs.h
 
 libincludedir = $(includedir)/blockdev
 libinclude_HEADERS = crypto.h \
@@ -83,7 +89,8 @@ libinclude_HEADERS = crypto.h \
 	lvm.h \
 	mdraid.h \
 	mpath.h \
-	swap.h
+	swap.h \
+    fs.h
 
 if ON_S390
 libinclude_HEADERS += s390.h
