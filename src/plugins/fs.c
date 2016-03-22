@@ -300,3 +300,18 @@ gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error) {
     return bd_utils_exec_and_report_error (args, error);
 }
 
+/**
+ * bd_fs_ext4_set_label:
+ * @device: the device the file system on which to set label for
+ * @label: label to set
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the label of ext4 file system on the @device was
+ *          successfully set or not
+ */
+gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error) {
+    gchar *args[4] = {"tune2fs", "-L", label, device, NULL};
+
+    return bd_utils_exec_and_report_error (args, error);
+}
+

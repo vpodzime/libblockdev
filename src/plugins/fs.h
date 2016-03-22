@@ -15,6 +15,7 @@ gboolean bd_fs_ext4_mkfs (gchar *device, GError **error);
 gboolean bd_fs_ext4_wipe (gchar *device, GError **error);
 gboolean bd_fs_ext4_check (gchar *device, GError **error);
 gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
+gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error);
 
 #endif  /* BD_PART */
 

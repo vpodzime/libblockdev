@@ -60,4 +60,15 @@ gboolean bd_fs_ext4_check (gchar *device, GError **error);
  */
 gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
 
+/**
+ * bd_fs_ext4_set_label:
+ * @device: the device the file system on which to set label for
+ * @label: label to set
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the label of ext4 file system on the @device was
+ *          successfully set or not
+ */
+gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error);
+
 #endif  /* BD_FS_API */
