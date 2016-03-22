@@ -260,3 +260,43 @@ gboolean bd_fs_ext4_mkfs (gchar *device, GError **error) {
 gboolean bd_fs_ext4_wipe (gchar *device, GError **error) {
     return wipe_fs (device, "ext4", error);
 }
+
+/**
+ * bd_fs_ext4_check:
+ * @device: the device the file system on which to check
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an ext4 file system on the @device is clean or not
+ */
+gboolean bd_fs_ext4_check (gchar *device, GError **error) {
+    /* Force checking even if the file system seems clean. AND
+     * Open the filesystem read-only, and assume an answer of no to all
+     * questions. */
+    gchar *args[5] = {"e2fsck", "-f", "-n", device, NULL};
+    gboolean ret = FALSE;
+
+    ret = bd_utils_exec_and_report_error (args, error);
+    if (!ret && (*error) && g_error_matches (*error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_FAILED))
+        /* no error should be reported for just non-zero exit code */
+        g_clear_error (error);
+    return ret;
+}
+
+/**
+ * bd_fs_ext4_repair:
+ * @device: the device the file system on which to repair
+ * @unsafe: whether to do unsafe operations too
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an ext4 file system on the @device was successfully repaired
+ *          (if needed) or not (error is set in that case)
+ */
+gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error) {
+    /* Force checking even if the file system seems clean. AND
+     *     Automatically repair what can be safely repaired. OR
+     *     Assume an answer of `yes' to all questions. */
+    gchar *args[5] = {"e2fsck", "-f", unsafe ? "-y" : "-p", device, NULL};
+
+    return bd_utils_exec_and_report_error (args, error);
+}
+

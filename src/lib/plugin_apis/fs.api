@@ -40,4 +40,24 @@ gboolean bd_fs_ext4_mkfs (gchar *device, GError **error);
  */
 gboolean bd_fs_ext4_wipe (gchar *device, GError **error);
 
+/**
+ * bd_fs_ext4_check:
+ * @device: the device the file system on which to check
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an ext4 file system on the @device is clean or not
+ */
+gboolean bd_fs_ext4_check (gchar *device, GError **error);
+
+/**
+ * bd_fs_ext4_repair:
+ * @device: the device the file system on which to repair
+ * @unsafe: whether to do unsafe operations too
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an ext4 file system on the @device was successfully repaired
+ *          (if needed) or not (error is set in that case)
+ */
+gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
+
 #endif  /* BD_FS_API */

@@ -13,6 +13,8 @@ typedef enum {
 gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error);
 gboolean bd_fs_ext4_mkfs (gchar *device, GError **error);
 gboolean bd_fs_ext4_wipe (gchar *device, GError **error);
+gboolean bd_fs_ext4_check (gchar *device, GError **error);
+gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
 
 #endif  /* BD_PART */
 
