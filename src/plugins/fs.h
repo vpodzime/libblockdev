@@ -31,6 +31,7 @@ gboolean bd_fs_ext4_check (gchar *device, GError **error);
 gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
 gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error);
 BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error);
+gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, GError **error);
 
 #endif  /* BD_PART */
 

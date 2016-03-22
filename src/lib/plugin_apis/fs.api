@@ -138,4 +138,15 @@ gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error);
  */
 BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error);
 
+/**
+ * bd_fs_ext4_resize:
+ * @device: the device the file system of which to resize
+ * @new_size: new requested size for the file system (if 0, the file system is
+ *            adapted to the underlying block device)
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the file system on @device was successfully resized or not
+ */
+gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, GError **error);
+
 #endif  /* BD_FS_API */

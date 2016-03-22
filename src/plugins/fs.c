@@ -456,3 +456,25 @@ BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error) {
 
     return ret;
 }
+
+/**
+ * bd_fs_ext4_resize:
+ * @device: the device the file system of which to resize
+ * @new_size: new requested size for the file system (if 0, the file system is
+ *            adapted to the underlying block device)
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the file system on @device was successfully resized or not
+ */
+gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, GError **error) {
+    gchar *args[4] = {"resize2fs", device, NULL, NULL};
+    gboolean ret = FALSE;
+
+    if (new_size != 0)
+        /* resize2fs doesn't understand bytes, just 512B sectors */
+        args[2] = g_strdup_printf ("%"G_GUINT64_FORMAT"s", new_size / 512);
+    ret = bd_utils_exec_and_report_error (args, error);
+
+    g_free (args[2]);
+    return ret;
+}
