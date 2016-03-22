@@ -56,6 +56,14 @@ gboolean check() {
     return ret;
 }
 
+static gint synced_close (gint fd) {
+    gint ret = 0;
+    ret = fsync (fd);
+    if (close (fd) != 0)
+        ret = 1;
+    return ret;
+}
+
 /**
  * bd_fs_wipe:
  * @device: the device to wipe signatures from
@@ -89,7 +97,7 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to create a probe for the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -103,7 +111,7 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to probe the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -112,7 +120,7 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to wipe signatures on the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
     while (all && (blkid_do_probe (probe) == 0)) {
@@ -121,13 +129,13 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
             g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                          "Failed to wipe signatures on the device '%s'", device);
             blkid_free_probe (probe);
-            close (fd);
+            synced_close (fd);
             return FALSE;
         }
     }
 
     blkid_free_probe (probe);
-    close (fd);
+    synced_close (fd);
 
     return TRUE;
 }
@@ -159,7 +167,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to create a probe for the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -174,7 +182,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to probe the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -183,7 +191,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to get signature type for the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -191,7 +199,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_INVAL,
                      "The signature on the device '%s' is of type '%s', not 'filesystem'", device, value);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
@@ -201,7 +209,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
             g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                          "Failed to get filesystem type for the device '%s'", device);
             blkid_free_probe (probe);
-            close (fd);
+            synced_close (fd);
             return FALSE;
         }
 
@@ -209,7 +217,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
             g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_INVAL,
                          "The file system type on the device '%s' is '%s', not '%s'", device, value, fs_type);
             blkid_free_probe (probe);
-            close (fd);
+            synced_close (fd);
             return FALSE;
         }
     }
@@ -219,12 +227,12 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
         g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_FAIL,
                      "Failed to wipe the filesystem signature on the device '%s'", device);
         blkid_free_probe (probe);
-        close (fd);
+        synced_close (fd);
         return FALSE;
     }
 
     blkid_free_probe (probe);
-    close (fd);
+    synced_close (fd);
     return TRUE;
 }
 
