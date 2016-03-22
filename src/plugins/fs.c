@@ -43,6 +43,37 @@ GQuark bd_fs_error_quark (void)
 }
 
 /**
+ * bd_fs_ext4_info_copy: (skip)
+ *
+ * Creates a new copy of @data.
+ */
+BDFSExt4Info* bd_fs_ext4_info_copy (BDFSExt4Info *data) {
+    BDFSExt4Info *ret = g_new0 (BDFSExt4Info, 1);
+
+    ret->label = g_strdup (data->label);
+    ret->uuid = g_strdup (data->uuid);
+    ret->state = g_strdup (data->state);
+    ret->block_size = data->block_size;
+    ret->block_count = data->block_count;
+    ret->free_blocks = data->free_blocks;
+    ret->mount_count = data->mount_count;
+
+    return ret;
+}
+
+/**
+ * bd_fs_ext4_info_free: (skip)
+ *
+ * Frees @data.
+ */
+void bd_fs_ext4_info_free (BDFSExt4Info *data) {
+    g_free (data->label);
+    g_free (data->uuid);
+    g_free (data->state);
+    g_free (data);
+}
+
+/**
  * check: (skip)
  */
 gboolean check() {
@@ -315,3 +346,113 @@ gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error) {
     return bd_utils_exec_and_report_error (args, error);
 }
 
+/**
+ * parse_mdadm_vars: (skip)
+ * @str: string to parse
+ * @item_sep: item separator(s) (key-value pairs separator)
+ * @key_val_sep: key-value separator(s) (typically ":" or "=")
+ * @num_items: (out): number of parsed items (key-value pairs)
+ *
+ * Returns: (transfer full): GHashTable containing the key-value pairs parsed
+ * from the @str.
+ */
+static GHashTable* parse_output_vars (gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
+    GHashTable *table = NULL;
+    gchar **items = NULL;
+    gchar **item_p = NULL;
+    gchar **key_val = NULL;
+
+    table = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+    *num_items = 0;
+
+    items = g_strsplit_set (str, item_sep, 0);
+    for (item_p=items; *item_p; item_p++) {
+        key_val = g_strsplit (*item_p, key_val_sep, 2);
+        if (g_strv_length (key_val) == 2) {
+            /* we only want to process valid lines (with the separator) */
+            g_hash_table_insert (table, g_strstrip (key_val[0]), g_strstrip (key_val[1]));
+            (*num_items)++;
+        } else
+            /* invalid line, just free key_val */
+            g_strfreev (key_val);
+    }
+
+    g_strfreev (items);
+    return table;
+}
+
+static BDFSExt4Info* get_ext4_info_from_table (GHashTable *table, gboolean free_table) {
+    BDFSExt4Info *ret = g_new0 (BDFSExt4Info, 1);
+    gchar *value = NULL;
+
+    ret->label = g_strdup ((gchar*) g_hash_table_lookup (table, "Filesystem volume name"));
+    ret->uuid = g_strdup ((gchar*) g_hash_table_lookup (table, "Filesystem UUID"));
+    ret->state = g_strdup ((gchar*) g_hash_table_lookup (table, "Filesystem state"));
+
+    value = (gchar*) g_hash_table_lookup (table, "Block size");
+    if (value)
+        ret->block_size = g_ascii_strtoull (value, NULL, 0);
+    else
+        ret->block_size = 0;
+    value = (gchar*) g_hash_table_lookup (table, "Block count");
+    if (value)
+        ret->block_count = g_ascii_strtoull (value, NULL, 0);
+    else
+        ret->block_count = 0;
+    value = (gchar*) g_hash_table_lookup (table, "Free blocks");
+    if (value)
+        ret->free_blocks = g_ascii_strtoull (value, NULL, 0);
+    else
+        ret->free_blocks = 0;
+    value = (gchar*) g_hash_table_lookup (table, "Mount count");
+    if (value)
+        ret->mount_count = g_ascii_strtoull (value, NULL, 0);
+    else
+        ret->mount_count = 0;
+
+    if (free_table)
+        g_hash_table_destroy (table);
+
+    return ret;
+}
+
+/**
+ * bd_fs_ext4_get_info:
+ * @device: the device the file system of which to get info for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): information about the file system on @device or
+ *                           %NULL in case of error
+ */
+BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error) {
+    gchar *args[4] = {"dumpe2fs", "-h", device, NULL};
+    gboolean success = FALSE;
+    gchar *output = NULL;
+    GHashTable *table = NULL;
+    guint num_items = 0;
+    BDFSExt4Info *ret = NULL;
+
+    success = bd_utils_exec_and_capture_output (args, &output, error);
+    if (!success) {
+        /* error is already populated */
+        return FALSE;
+    }
+
+    table = parse_output_vars (output, "\n", ":", &num_items);
+    g_free (output);
+    if (!table || (num_items == 0)) {
+        /* something bad happened or some expected items were missing  */
+        g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_PARSE, "Failed to parse ext4 file system information");
+        if (table)
+            g_hash_table_destroy (table);
+        return NULL;
+    }
+
+    ret = get_ext4_info_from_table (table, TRUE);
+    if (!ret) {
+        g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_PARSE, "Failed to parse ext4 file system information");
+        return NULL;
+    }
+
+    return ret;
+}

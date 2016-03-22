@@ -7,8 +7,65 @@
 #define BD_FS_ERROR bd_fs_error_quark ()
 typedef enum {
     BD_FS_ERROR_INVAL,
+    BD_FS_ERROR_PARSE,
     BD_FS_ERROR_FAIL,
 } BDFsError;
+
+#define BD_FS_TYPE_EXT4_INFO (bd_fs_ext4_info_get_type ())
+GType bd_fs_ext4_info_get_type();
+
+typedef struct BDFSExt4Info {
+    gchar *label;
+    gchar *uuid;
+    gchar *state;
+    guint64 block_size;
+    guint64 block_count;
+    guint64 free_blocks;
+    guint64 mount_count;
+} BDFSExt4Info;
+
+/**
+ * bd_fs_ext4_info_copy: (skip)
+ *
+ * Creates a new copy of @data.
+ */
+BDFSExt4Info* bd_fs_ext4_info_copy (BDFSExt4Info *data) {
+    BDFSExt4Info *ret = g_new0 (BDFSExt4Info, 1);
+
+    ret->label = g_strdup (data->label);
+    ret->uuid = g_strdup (data->uuid);
+    ret->state = g_strdup (data->state);
+    ret->block_size = data->block_size;
+    ret->block_count = data->block_count;
+    ret->free_blocks = data->free_blocks;
+    ret->mount_count = data->mount_count;
+
+    return ret;
+}
+
+/**
+ * bd_fs_ext4_info_free: (skip)
+ *
+ * Frees @data.
+ */
+void bd_fs_ext4_info_free (BDFSExt4Info *data) {
+    g_free (data->label);
+    g_free (data->uuid);
+    g_free (data->state);
+    g_free (data);
+}
+
+GType bd_fs_ext4_info_get_type () {
+    static GType type = 0;
+
+    if (G_UNLIKELY(type == 0)) {
+        type = g_boxed_type_register_static("BDFSExt4Info",
+                                            (GBoxedCopyFunc) bd_fs_ext4_info_copy,
+                                            (GBoxedFreeFunc) bd_fs_ext4_info_free);
+    }
+
+    return type;
+}
 
 /**
  * bd_fs_wipe:
@@ -70,5 +127,15 @@ gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, GError **error);
  *          successfully set or not
  */
 gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error);
+
+/**
+ * bd_fs_ext4_get_info:
+ * @device: the device the file system of which to get info for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): information about the file system on @device or
+ *                           %NULL in case of error
+ */
+BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error);
 
 #endif  /* BD_FS_API */
