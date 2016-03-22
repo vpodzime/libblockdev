@@ -6,6 +6,7 @@
 
 #define BD_FS_ERROR bd_fs_error_quark ()
 typedef enum {
+    BD_FS_ERROR_INVAL,
     BD_FS_ERROR_FAIL,
 } BDFsError;
 
@@ -28,5 +29,15 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error);
  * Returns: whether a new ext4 fs was successfully created on @device or not
  */
 gboolean bd_fs_ext4_mkfs (gchar *device, GError **error);
+
+/**
+ * bd_fs_ext4_wipe:
+ * @device: the device to wipe an ext4 signature from
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an ext4 signature was successfully wiped from the @device or
+ *          not
+ */
+gboolean bd_fs_ext4_wipe (gchar *device, GError **error);
 
 #endif  /* BD_FS_API */
