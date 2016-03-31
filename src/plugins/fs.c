@@ -476,3 +476,28 @@ gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, GError **error) {
     g_free (args[2]);
     return ret;
 }
+
+/**
+ * bd_fs_xfs_mkfs:
+ * @device: the device to create a new xfs fs on
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether a new xfs fs was successfully created on @device or not
+ */
+gboolean bd_fs_xfs_mkfs (gchar *device, GError **error) {
+    gchar *args[3] = {"mkfs.xfs", device, NULL};
+
+    return bd_utils_exec_and_report_error (args, error);
+}
+
+/**
+ * bd_fs_xfs_wipe:
+ * @device: the device to wipe an xfs signature from
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an xfs signature was successfully wiped from the @device or
+ *          not
+ */
+gboolean bd_fs_xfs_wipe (gchar *device, GError **error) {
+    return wipe_fs (device, "xfs", error);
+}

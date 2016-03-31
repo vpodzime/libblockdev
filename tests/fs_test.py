@@ -251,3 +251,49 @@ class Ext4Resize(FSTestCase):
         self.assertEqual(fi.block_count, 100 * 1024**2 / 1024)
         # at least 90 % should be available, so it should be reported
         self.assertGreater(fi.free_blocks, 0.90 * 100 * 1024**2 / 1024)
+
+class XfsTestMkfs(FSTestCase):
+    def test_xfs_mkfs(self):
+        """Verify that it is possible to create a new xfs file system"""
+
+        with self.assertRaises(GLib.GError):
+            BlockDev.fs_xfs_mkfs("/non/existing/device")
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        # just try if we can mount the file system
+        with mounted(self.loop_dev, self.mount_dir):
+            pass
+
+        BlockDev.fs_wipe(self.loop_dev, True)
+
+class XfsTestWipe(FSTestCase):
+    def test_xfs_wipe(self):
+        """Verify that it is possible to wipe an xfs file system"""
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        succ = BlockDev.fs_xfs_wipe(self.loop_dev)
+        self.assertTrue(succ)
+
+        # already wiped, should fail this time
+        with self.assertRaises(GLib.GError):
+            BlockDev.fs_xfs_wipe(self.loop_dev)
+
+        os.system("pvcreate %s >/dev/null" % self.loop_dev)
+
+        # LVM PV signature, not an xfs file system
+        with self.assertRaises(GLib.GError):
+            BlockDev.fs_xfs_wipe(self.loop_dev)
+
+        BlockDev.fs_wipe(self.loop_dev, True)
+
+        os.system("mkfs.ext2 %s &>/dev/null" % self.loop_dev)
+
+        # ext2, not an xfs file system
+        with self.assertRaises(GLib.GError):
+            BlockDev.fs_xfs_wipe(self.loop_dev)
+
+        BlockDev.fs_wipe(self.loop_dev, True)
