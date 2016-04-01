@@ -35,5 +35,8 @@ gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, GError **error);
 
 gboolean bd_fs_xfs_mkfs (gchar *device, GError **error);
 gboolean bd_fs_xfs_wipe (gchar *device, GError **error);
+gboolean bd_fs_xfs_check (gchar *device, GError **error);
+gboolean bd_fs_xfs_repair (gchar *device, GError **error);
+gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error);
 
 #endif  /* BD_PART */

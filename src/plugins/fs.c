@@ -501,3 +501,54 @@ gboolean bd_fs_xfs_mkfs (gchar *device, GError **error) {
 gboolean bd_fs_xfs_wipe (gchar *device, GError **error) {
     return wipe_fs (device, "xfs", error);
 }
+
+/**
+ * bd_fs_xfs_check:
+ * @device: the device the file system on which to check
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an xfs file system on the @device is clean or not
+ *
+ * Note: if the file system is mounted it may be reported as unclean even if
+ *       everything is okay and there are just some pending/in-progress writes
+ */
+gboolean bd_fs_xfs_check (gchar *device, GError **error) {
+    gchar *args[6] = {"xfs_db", "-r", "-c", "check", device, NULL};
+    gboolean ret = FALSE;
+
+    ret = bd_utils_exec_and_report_error (args, error);
+    if (!ret && *error &&  g_error_matches ((*error), BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_FAILED))
+        /* non-zero exit status -> the fs is not clean, but not an error */
+        /* TODO: should we check that the device exists and contains an XFS FS beforehand? */
+        g_clear_error (error);
+    return ret;
+}
+
+/**
+ * bd_fs_xfs_repair:
+ * @device: the device the file system on which to repair
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether an xfs file system on the @device was successfully repaired
+ *          (if needed) or not (error is set in that case)
+ */
+gboolean bd_fs_xfs_repair (gchar *device, GError **error) {
+    gchar *args[3] = {"xfs_repair", device, NULL};
+
+    return bd_utils_exec_and_report_error (args, error);
+}
+
+/**
+ * bd_fs_xfs_set_label:
+ * @device: the device the file system on which to set label for
+ * @label: label to set
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the label of xfs file system on the @device was
+ *          successfully set or not
+ */
+gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error) {
+    gchar *args[5] = {"xfs_admin", "-L", label, device, NULL};
+
+    return bd_utils_exec_and_report_error (args, error);
+}

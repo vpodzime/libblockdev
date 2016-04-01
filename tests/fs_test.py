@@ -297,3 +297,39 @@ class XfsTestWipe(FSTestCase):
             BlockDev.fs_xfs_wipe(self.loop_dev)
 
         BlockDev.fs_wipe(self.loop_dev, True)
+
+class XfsTestCheck(FSTestCase):
+    def test_xfs_check(self):
+        """Verify that it is possible to check an xfs file system"""
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        succ = BlockDev.fs_xfs_check(self.loop_dev)
+        self.assertTrue(succ)
+
+        # mounted, but can be checked and nothing happened in/to the file
+        # system, so it should be just reported as clean
+        with mounted(self.loop_dev, self.mount_dir):
+            succ = BlockDev.fs_xfs_check(self.loop_dev)
+            self.assertTrue(succ)
+
+        succ = BlockDev.fs_xfs_check(self.loop_dev)
+        self.assertTrue(succ)
+
+class XfsTestRepair(FSTestCase):
+    def test_xfs_repair(self):
+        """Verify that it is possible to repair an xfs file system"""
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        succ = BlockDev.fs_xfs_repair(self.loop_dev)
+        self.assertTrue(succ)
+
+        with mounted(self.loop_dev, self.mount_dir):
+            with self.assertRaises(GLib.GError):
+                BlockDev.fs_xfs_repair(self.loop_dev)
+
+        succ = BlockDev.fs_xfs_repair(self.loop_dev)
+        self.assertTrue(succ)
