@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <blkid.h>
+#include <ctype.h>
 
 #include "fs.h"
 
@@ -69,6 +70,33 @@ void bd_fs_ext4_info_free (BDFSExt4Info *data) {
     g_free (data->label);
     g_free (data->uuid);
     g_free (data->state);
+    g_free (data);
+}
+
+/**
+ * bd_fs_xfs_info_copy: (skip)
+ *
+ * Creates a new copy of @data.
+ */
+BDFSXfsInfo* bd_fs_xfs_info_copy (BDFSXfsInfo *data) {
+    BDFSXfsInfo *ret = g_new0 (BDFSXfsInfo, 1);
+
+    ret->label = g_strdup (data->label);
+    ret->uuid = g_strdup (data->uuid);
+    ret->block_size = data->block_size;
+    ret->block_count = data->block_count;
+
+    return ret;
+}
+
+/**
+ * bd_fs_xfs_info_free: (skip)
+ *
+ * Frees @data.
+ */
+void bd_fs_xfs_info_free (BDFSXfsInfo *data) {
+    g_free (data->label);
+    g_free (data->uuid);
     g_free (data);
 }
 
@@ -551,4 +579,109 @@ gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error) {
     gchar *args[5] = {"xfs_admin", "-L", label, device, NULL};
 
     return bd_utils_exec_and_report_error (args, error);
+}
+
+/**
+ * bd_fs_xfs_get_info:
+ * @device: the device the file system of which to get info for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): information about the file system on @device or
+ *                           %NULL in case of error
+ */
+BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error) {
+    gchar *args[4] = {"xfs_admin", "-lu", device, NULL};
+    gboolean success = FALSE;
+    gchar *output = NULL;
+    BDFSXfsInfo *ret = NULL;
+    gchar **lines = NULL;
+    gchar **line_p = NULL;
+    gboolean have_label = FALSE;
+    gboolean have_uuid = FALSE;
+    gchar *val_start = NULL;
+    gchar *val_end = NULL;
+
+    success = bd_utils_exec_and_capture_output (args, &output, error);
+    if (!success)
+        /* error is already populated */
+        return FALSE;
+
+    ret = g_new0 (BDFSXfsInfo, 1);
+    lines = g_strsplit (output, "\n", 0);
+    g_free (output);
+    for (line_p=lines; *line_p && (!have_label || !have_uuid); line_p++) {
+        if (!have_label && g_str_has_prefix (*line_p, "label")) {
+            /* extract label from something like this: label = "TEST_LABEL" */
+            val_start = strchr (*line_p, '"');
+            if (val_start)
+                val_end = strchr(val_start + 1, '"');
+            if (val_start && val_end) {
+                ret->label = g_strndup (val_start + 1, val_end - val_start - 1);
+                have_label = TRUE;
+            }
+        } else if (!have_uuid && g_str_has_prefix (*line_p, "UUID")) {
+            /* get right after the "UUID = " prefix */
+            val_start = *line_p + 7;
+            ret->uuid = g_strdup (val_start);
+            have_uuid = TRUE;
+        }
+    }
+    g_strfreev (lines);
+
+    args[0] = "xfs_info";
+    args[1] = device;
+    args[2] = NULL;
+    success = bd_utils_exec_and_capture_output (args, &output, error);
+    if (!success) {
+        /* error is already populated */
+        bd_fs_xfs_info_free (ret);
+        return FALSE;
+    }
+
+    lines = g_strsplit (output, "\n", 0);
+    g_free (output);
+    line_p = lines;
+    /* find the beginning of the (data) section we are interested in */
+    while (*line_p && !g_str_has_prefix (*line_p, "data"))
+        line_p++;
+    if (!line_p) {
+        /* error is already populated */
+        g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_PARSE, "Failed to parse xfs file system information");
+        g_strfreev (lines);
+        bd_fs_xfs_info_free (ret);
+        return FALSE;
+    }
+
+    /* extract data from something like this: "data     =      bsize=4096   blocks=262400, imaxpct=25" */
+    val_start = strchr (*line_p, '=');
+    val_start++;
+    while (isspace (*val_start))
+        val_start++;
+    if (g_str_has_prefix (val_start, "bsize")) {
+        val_start = strchr (val_start, '=');
+        val_start++;
+        ret->block_size = g_ascii_strtoull (val_start, NULL, 0);
+    } else {
+        /* error is already populated */
+        g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_PARSE, "Failed to parse xfs file system information");
+        g_strfreev (lines);
+        bd_fs_xfs_info_free (ret);
+        return FALSE;
+    }
+    while (isdigit (*val_start) || isspace(*val_start))
+        val_start++;
+    if (g_str_has_prefix (val_start, "blocks")) {
+        val_start = strchr (val_start, '=');
+        val_start++;
+        ret->block_count = g_ascii_strtoull (val_start, NULL, 0);
+    } else {
+        /* error is already populated */
+        g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_PARSE, "Failed to parse xfs file system information");
+        g_strfreev (lines);
+        bd_fs_xfs_info_free (ret);
+        return FALSE;
+    }
+    g_strfreev (lines);
+
+    return ret;
 }
