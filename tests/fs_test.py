@@ -384,56 +384,62 @@ class XfsSetLabel(FSTestCase):
         self.assertEqual(fi.label, "")
 
 class XfsResize(FSTestCase):
+    def _destroy_lvm(self):
+        os.system("vgremove --yes libbd_fs_tests &>/dev/null")
+        os.system("pvremove --yes %s &>/dev/null" % self.loop_dev)
+
     def test_xfs_resize(self):
         """Verify that it is possible to resize an xfs file system"""
 
-        # create a 50MiB mapping on the loop device
-        os.system("dmsetup create libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((50 * 1024**2) // 512, self.loop_dev, self.loop_dev))
-        self.addCleanup(lambda: os.system("dmsetup remove libblockdev-tests >/dev/null"))
-        map_dev = "/dev/mapper/libblockdev-tests"
+        os.system("pvcreate -ff -y %s &>/dev/null" % self.loop_dev)
+        os.system("vgcreate -s10M libbd_fs_tests %s &>/dev/null" % self.loop_dev)
+        os.system("lvcreate -n xfs_test -L50M libbd_fs_tests &>/dev/null")
+        self.addCleanup(self._destroy_lvm)
+        lv = "/dev/libbd_fs_tests/xfs_test"
 
-        succ = BlockDev.fs_xfs_mkfs(map_dev)
+        succ = BlockDev.fs_xfs_mkfs(lv)
         self.assertTrue(succ)
 
-        with mounted(map_dev, self.mount_dir):
-            fi = BlockDev.fs_xfs_get_info(map_dev)
+        with mounted(lv, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(lv)
         self.assertTrue(fi)
         self.assertEqual(fi.block_size * fi.block_count, 50 * 1024**2)
 
         # no change, nothing should happen
-        with mounted(map_dev, self.mount_dir):
+        with mounted(lv, self.mount_dir):
             succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
         self.assertTrue(succ)
 
-        os.system("dmsetup suspend libblockdev-tests")
-        os.system("dmsetup reload libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((70 * 1024**2) // 512, self.loop_dev, self.loop_dev))
-        os.system("dmsetup resume libblockdev-tests")
+        with mounted(lv, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(lv)
+        self.assertTrue(fi)
+        self.assertEqual(fi.block_size * fi.block_count, 50 * 1024**2)
+
+        os.system("lvresize -L70M libbd_fs_tests/xfs_test &>/dev/null")
         # should grow
-        with mounted(map_dev, self.mount_dir):
+        with mounted(lv, self.mount_dir):
             succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
         self.assertTrue(succ)
-        with mounted(map_dev, self.mount_dir):
-            fi = BlockDev.fs_xfs_get_info(map_dev)
+        with mounted(lv, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(lv)
         self.assertTrue(fi)
         self.assertEqual(fi.block_size * fi.block_count, 70 * 1024**2)
 
-        os.system("dmsetup suspend libblockdev-tests")
-        os.system("dmsetup reload libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((90 * 1024**2) // 512, self.loop_dev, self.loop_dev))
-        os.system("dmsetup resume libblockdev-tests")
+        os.system("lvresize -L90M libbd_fs_tests/xfs_test &>/dev/null")
         # should grow just to 80 MiB
-        with mounted(map_dev, self.mount_dir):
-            succ = BlockDev.fs_xfs_resize(self.mount_dir, 80 * 1024**2)
+        with mounted(lv, self.mount_dir):
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 80 * 1024**2 / fi.block_size)
         self.assertTrue(succ)
-        with mounted(map_dev, self.mount_dir):
-            fi = BlockDev.fs_xfs_get_info(map_dev)
+        with mounted(lv, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(lv)
         self.assertTrue(fi)
         self.assertEqual(fi.block_size * fi.block_count, 80 * 1024**2)
 
         # should grow to 90 MiB
-        with mounted(map_dev, self.mount_dir):
+        with mounted(lv, self.mount_dir):
             succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
         self.assertTrue(succ)
-        with mounted(map_dev, self.mount_dir):
-            fi = BlockDev.fs_xfs_get_info(map_dev)
+        with mounted(lv, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(lv)
         self.assertTrue(fi)
         self.assertEqual(fi.block_size * fi.block_count, 90 * 1024**2)

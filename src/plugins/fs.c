@@ -691,32 +691,22 @@ BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error) {
 /**
  * bd_fs_xfs_resize:
  * @mpoint: the mount point the file system on which to resize
- * @new_size: new requested size for the file system (if 0, the file system is
- *            adapted to the underlying block device)
+ * @new_size: new requested size for the file system *in file system blocks* (see bd_fs_xfs_get_info())
+ *            (if 0, the file system is adapted to the underlying block device)
  * @error: (out): place to store error (if any)
  *
  * Returns: whether the file system mounted on @mpoint was successfully resized or not
  */
 gboolean bd_fs_xfs_resize (gchar *mpoint, guint64 new_size, GError **error) {
-    gchar *args[4] = {"xfs_growfs", NULL, NULL, NULL, NULL};
-    BDFSXfsInfo *info = NULL;
+    gchar *args[5] = {"xfs_growfs", NULL, NULL, NULL, NULL};
     gchar *size_str = NULL;
     gboolean ret = FALSE;
 
     if (new_size != 0) {
         args[1] = "-D";
         /* xfs_growfs doesn't understand bytes, just a number of blocks */
-        info = bd_fs_xfs_get_info (mpoint, error);
-        if (!info)
-            /* error is already populated */
-            return FALSE;
-        size_str = g_strdup_printf ("%"G_GUINT64_FORMAT, new_size / info->block_size);
+        size_str = g_strdup_printf ("%"G_GUINT64_FORMAT, new_size);
         args[2] = size_str;
-        if (new_size < (info->block_size * info->block_count)) {
-            g_set_error (error, BD_FS_ERROR, BD_FS_ERROR_INVAL, "Cannot shrink an xfs file system");
-            bd_fs_xfs_info_free (info);
-        }
-        bd_fs_xfs_info_free (info);
         args[3] = mpoint;
     } else
         args[1] = mpoint;

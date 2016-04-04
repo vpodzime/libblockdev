@@ -261,8 +261,8 @@ BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error);
 /**
  * bd_fs_xfs_resize:
  * @mpoint: the mount point the file system on which to resize
- * @new_size: new requested size for the file system (if 0, the file system is
- *            adapted to the underlying block device)
+ * @new_size: new requested size for the file system *in file system blocks* (see bd_fs_xfs_get_info())
+ *            (if 0, the file system is adapted to the underlying block device)
  * @error: (out): place to store error (if any)
  *
  * Returns: whether the file system mounted on @mpoint was successfully resized or not
