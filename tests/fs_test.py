@@ -333,3 +333,52 @@ class XfsTestRepair(FSTestCase):
 
         succ = BlockDev.fs_xfs_repair(self.loop_dev)
         self.assertTrue(succ)
+
+class XfsGetInfo(FSTestCase):
+    def test_xfs_get_info(self):
+        """Verify that it is possible to get info about an xfs file system"""
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        with mounted(self.loop_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(self.loop_dev)
+
+        self.assertEqual(fi.block_size, 4096)
+        self.assertEqual(fi.block_count, 100 * 1024**2 / 4096)
+        self.assertEqual(fi.label, "")
+        # should be an non-empty string
+        self.assertTrue(fi.uuid)
+
+class XfsSetLabel(FSTestCase):
+    def test_xfs_set_label(self):
+        """Verify that it is possible to set label of an xfs file system"""
+
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        self.assertTrue(succ)
+
+        with mounted(self.loop_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(self.loop_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.label, "")
+
+        succ = BlockDev.fs_xfs_set_label(self.loop_dev, "TEST_LABEL")
+        self.assertTrue(succ)
+        with mounted(self.loop_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(self.loop_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.label, "TEST_LABEL")
+
+        succ = BlockDev.fs_xfs_set_label(self.loop_dev, "TEST_LABEL2")
+        self.assertTrue(succ)
+        with mounted(self.loop_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(self.loop_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.label, "TEST_LABEL2")
+
+        succ = BlockDev.fs_xfs_set_label(self.loop_dev, "")
+        self.assertTrue(succ)
+        with mounted(self.loop_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(self.loop_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.label, "")

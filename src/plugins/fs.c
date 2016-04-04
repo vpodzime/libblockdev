@@ -577,6 +577,8 @@ gboolean bd_fs_xfs_repair (gchar *device, GError **error) {
  */
 gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error) {
     gchar *args[5] = {"xfs_admin", "-L", label, device, NULL};
+    if (!label || (strncmp (label, "", 1) == 0))
+        args[2] = "--";
 
     return bd_utils_exec_and_report_error (args, error);
 }
