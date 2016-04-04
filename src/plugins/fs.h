@@ -50,5 +50,6 @@ gboolean bd_fs_xfs_check (gchar *device, GError **error);
 gboolean bd_fs_xfs_repair (gchar *device, GError **error);
 gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error);
 BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error);
+gboolean bd_fs_xfs_resize (gchar *mpoint, guint64 new_size, GError **error);
 
 #endif  /* BD_PART */

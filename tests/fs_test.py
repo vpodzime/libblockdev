@@ -205,7 +205,7 @@ class Ext4SetLabel(FSTestCase):
 
 class Ext4Resize(FSTestCase):
     def test_ext4_resize(self):
-        """Verify that it is possible to set label of an ext4 file system"""
+        """Verify that it is possible to resize an ext4 file system"""
 
         succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
         self.assertTrue(succ)
@@ -382,3 +382,58 @@ class XfsSetLabel(FSTestCase):
             fi = BlockDev.fs_xfs_get_info(self.loop_dev)
         self.assertTrue(fi)
         self.assertEqual(fi.label, "")
+
+class XfsResize(FSTestCase):
+    def test_xfs_resize(self):
+        """Verify that it is possible to resize an xfs file system"""
+
+        # create a 50MiB mapping on the loop device
+        os.system("dmsetup create libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((50 * 1024**2) // 512, self.loop_dev, self.loop_dev))
+        self.addCleanup(lambda: os.system("dmsetup remove libblockdev-tests >/dev/null"))
+        map_dev = "/dev/mapper/libblockdev-tests"
+
+        succ = BlockDev.fs_xfs_mkfs(map_dev)
+        self.assertTrue(succ)
+
+        with mounted(map_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(map_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.block_size * fi.block_count, 50 * 1024**2)
+
+        # no change, nothing should happen
+        with mounted(map_dev, self.mount_dir):
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+        self.assertTrue(succ)
+
+        os.system("dmsetup suspend libblockdev-tests")
+        os.system("dmsetup reload libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((70 * 1024**2) // 512, self.loop_dev, self.loop_dev))
+        os.system("dmsetup resume libblockdev-tests")
+        # should grow
+        with mounted(map_dev, self.mount_dir):
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+        self.assertTrue(succ)
+        with mounted(map_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(map_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.block_size * fi.block_count, 70 * 1024**2)
+
+        os.system("dmsetup suspend libblockdev-tests")
+        os.system("dmsetup reload libblockdev-tests --table '0 %d linear %s 0' %s >/dev/null" % ((90 * 1024**2) // 512, self.loop_dev, self.loop_dev))
+        os.system("dmsetup resume libblockdev-tests")
+        # should grow just to 80 MiB
+        with mounted(map_dev, self.mount_dir):
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 80 * 1024**2)
+        self.assertTrue(succ)
+        with mounted(map_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(map_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.block_size * fi.block_count, 80 * 1024**2)
+
+        # should grow to 90 MiB
+        with mounted(map_dev, self.mount_dir):
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+        self.assertTrue(succ)
+        with mounted(map_dev, self.mount_dir):
+            fi = BlockDev.fs_xfs_get_info(map_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.block_size * fi.block_count, 90 * 1024**2)
