@@ -539,7 +539,7 @@ BDKBDZramStats* bd_kbd_zram_get_stats (gchar *device, GError **error) {
  * @backing_device: backing (slow) device of the cache
  * @cache_device: cache (fast) device of the cache
  * @bcache_device: (out) (allow-none) (transfer full): place to store the name of the new bcache device (if any)
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the creation (right now
  *                                                 passed to the 'make-bcache' utility)
  * @error: (out): place to store error (if any)
  *

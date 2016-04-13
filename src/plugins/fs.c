@@ -297,7 +297,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
 /**
  * bd_fs_ext4_mkfs:
  * @device: the device to create a new ext4 fs on
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the creation (right now
  *                                                 passed to the 'mkfs.ext4' utility)
  * @error: (out): place to store error (if any)
  *
@@ -324,7 +324,7 @@ gboolean bd_fs_ext4_wipe (gchar *device, GError **error) {
 /**
  * bd_fs_ext4_check:
  * @device: the device the file system on which to check
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the check (right now
  *                                                 passed to the 'e2fsck' utility)
  * @error: (out): place to store error (if any)
  *
@@ -350,7 +350,7 @@ gboolean bd_fs_ext4_check (gchar *device, BDExtraArg **extra, GError **error) {
  * bd_fs_ext4_repair:
  * @device: the device the file system on which to repair
  * @unsafe: whether to do unsafe operations too
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the repair (right now
  *                                                 passed to the 'e2fsck' utility)
  * @error: (out): place to store error (if any)
  *
@@ -494,7 +494,7 @@ BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error) {
  * @device: the device the file system of which to resize
  * @new_size: new requested size for the file system (if 0, the file system is
  *            adapted to the underlying block device)
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the resize (right now
  *                                                 passed to the 'resize2fs' utility)
  * @error: (out): place to store error (if any)
  *
@@ -516,7 +516,7 @@ gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, BDExtraArg **extra,
 /**
  * bd_fs_xfs_mkfs:
  * @device: the device to create a new xfs fs on
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the creation (right now
  *                                                 passed to the 'mkfs.xfs' utility)
  * @error: (out): place to store error (if any)
  *
@@ -565,7 +565,7 @@ gboolean bd_fs_xfs_check (gchar *device, GError **error) {
 /**
  * bd_fs_xfs_repair:
  * @device: the device containing the file system to repair
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the repair (right now
  *                                                 passed to the 'xfs_repair' utility)
  * @error: (out): place to store error (if any)
  *
@@ -705,7 +705,7 @@ BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error) {
  * @mpoint: the mount point of the file system to resize
  * @new_size: new requested size for the file system *in file system blocks* (see bd_fs_xfs_get_info())
  *            (if 0, the file system is adapted to the underlying block device)
- * @extra: (allow-none) (array zero-terminated=1): extra options for the volume creation (right now
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the resize (right now
  *                                                 passed to the 'xfs_growfs' utility)
  * @error: (out): place to store error (if any)
  *
