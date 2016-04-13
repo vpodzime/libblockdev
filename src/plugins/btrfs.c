@@ -266,9 +266,9 @@ gboolean bd_btrfs_add_device (gchar *mountpoint, gchar *device, BDExtraArg **ext
  *
  * Returns: whether the @device was successfully removed from the @mountpoint btrfs volume or not
  */
-gboolean bd_btrfs_remove_device (gchar *mountpoint, gchar *device, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_remove_device (gchar *mountpoint, gchar *device, BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "device", "delete", device, mountpoint, NULL};
-    return bd_utils_exec_and_report_error (argv, args, error);
+    return bd_utils_exec_and_report_error (argv, extra, error);
 }
 
 /**
@@ -281,7 +281,7 @@ gboolean bd_btrfs_remove_device (gchar *mountpoint, gchar *device, BDExtraArg **
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully created or not
  */
-gboolean bd_btrfs_create_subvolume (gchar *mountpoint, gchar *name, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_create_subvolume (gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "create", NULL, NULL};
@@ -292,7 +292,7 @@ gboolean bd_btrfs_create_subvolume (gchar *mountpoint, gchar *name, BDExtraArg *
         path = g_strdup_printf ("%s/%s", mountpoint, name);
     argv[3] = path;
 
-    success = bd_utils_exec_and_report_error (argv, args, error);
+    success = bd_utils_exec_and_report_error (argv, extra, error);
     g_free (path);
 
     return success;
@@ -308,7 +308,7 @@ gboolean bd_btrfs_create_subvolume (gchar *mountpoint, gchar *name, BDExtraArg *
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully deleted or not
  */
-gboolean bd_btrfs_delete_subvolume (gchar *mountpoint, gchar *name, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_delete_subvolume (gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "delete", NULL, NULL};
@@ -319,7 +319,7 @@ gboolean bd_btrfs_delete_subvolume (gchar *mountpoint, gchar *name, BDExtraArg *
         path = g_strdup_printf ("%s/%s", mountpoint, name);
     argv[3] = path;
 
-    success = bd_utils_exec_and_report_error (argv, args, error);
+    success = bd_utils_exec_and_report_error (argv, extra, error);
     g_free (path);
 
     return success;
@@ -386,12 +386,12 @@ guint64 bd_btrfs_get_default_subvolume_id (gchar *mountpoint, GError **error) {
  * Returns: whether the @mountpoint volume's default subvolume was correctly set
  * to @subvol_id or not
  */
-gboolean bd_btrfs_set_default_subvolume (gchar *mountpoint, guint64 subvol_id, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_set_default_subvolume (gchar *mountpoint, guint64 subvol_id, BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "subvol", "set-default", NULL, mountpoint, NULL};
     gboolean ret = FALSE;
 
     argv[3] = g_strdup_printf ("%"G_GUINT64_FORMAT, subvol_id);
-    ret = bd_utils_exec_and_report_error (argv, args, error);
+    ret = bd_utils_exec_and_report_error (argv, extra, error);
     g_free (argv[3]);
 
     return ret;
@@ -408,7 +408,7 @@ gboolean bd_btrfs_set_default_subvolume (gchar *mountpoint, guint64 subvol_id, B
  *
  * Returns: whether the @dest snapshot of @source was successfully created or not
  */
-gboolean bd_btrfs_create_snapshot (gchar *source, gchar *dest, gboolean ro, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_create_snapshot (gchar *source, gchar *dest, gboolean ro, BDExtraArg **extra, GError **error) {
     gchar *argv[7] = {"btrfs", "subvol", "snapshot", NULL, NULL, NULL, NULL};
     guint next_arg = 3;
 
@@ -420,7 +420,7 @@ gboolean bd_btrfs_create_snapshot (gchar *source, gchar *dest, gboolean ro, BDEx
     next_arg++;
     argv[next_arg] = dest;
 
-    return bd_utils_exec_and_report_error (argv, args, error);
+    return bd_utils_exec_and_report_error (argv, extra, error);
 }
 
 /**
@@ -661,8 +661,8 @@ BDBtrfsFilesystemInfo* bd_btrfs_filesystem_info (gchar *device, GError **error) 
  *
  * See mkfs.btrfs(8) for details about @data_level, @md_level and btrfs in general.
  */
-gboolean bd_btrfs_mkfs (gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **args, GError **error) {
-    return bd_btrfs_create_volume (devices, label, data_level, md_level, args, error);
+gboolean bd_btrfs_mkfs (gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **extra, GError **error) {
+    return bd_btrfs_create_volume (devices, label, data_level, md_level, extra, error);
 }
 
 /**
@@ -676,12 +676,12 @@ gboolean bd_btrfs_mkfs (gchar **devices, gchar *label, gchar *data_level, gchar 
  * Returns: whether the @mountpoint filesystem was successfully resized to @size
  * or not
  */
-gboolean bd_btrfs_resize (gchar *mountpoint, guint64 size, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_resize (gchar *mountpoint, guint64 size, BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "filesystem", "resize", NULL, mountpoint, NULL};
     gboolean ret = FALSE;
 
     argv[3] = g_strdup_printf ("%"G_GUINT64_FORMAT, size);
-    ret = bd_utils_exec_and_report_error (argv, args, error);
+    ret = bd_utils_exec_and_report_error (argv, extra, error);
     g_free (argv[3]);
 
     return ret;
@@ -696,10 +696,10 @@ gboolean bd_btrfs_resize (gchar *mountpoint, guint64 size, BDExtraArg **args, GE
  *
  * Returns: whether the filesystem was successfully checked or not
  */
-gboolean bd_btrfs_check (gchar *device, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_check (gchar *device, BDExtraArg **extra, GError **error) {
     gchar *argv[4] = {"btrfs", "check", device, NULL};
 
-    return bd_utils_exec_and_report_error (argv, args, error);
+    return bd_utils_exec_and_report_error (argv, extra, error);
 }
 
 /**
@@ -711,10 +711,10 @@ gboolean bd_btrfs_check (gchar *device, BDExtraArg **args, GError **error) {
  *
  * Returns: whether the filesystem was successfully checked and repaired or not
  */
-gboolean bd_btrfs_repair (gchar *device, BDExtraArg **args, GError **error) {
+gboolean bd_btrfs_repair (gchar *device, BDExtraArg **extra, GError **error) {
     gchar *argv[5] = {"btrfs", "check", "--repair", device, NULL};
 
-    return bd_utils_exec_and_report_error (argv, args, error);
+    return bd_utils_exec_and_report_error (argv, extra, error);
 }
 
 /**
