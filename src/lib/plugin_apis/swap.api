@@ -10,11 +10,13 @@ typedef enum {
  * bd_swap_mkswap:
  * @device: a device to create swap space on
  * @label: (allow-none): a label for the swap space device
+ * @extra: (allow-none) (array zero-terminated=1): extra options for the creation (right now
+ *                                                 passed to the 'mkswap' utility)
  * @error: (out): place to store error (if any)
  *
  * Returns: whether the swap space was successfully created or not
  */
-gboolean bd_swap_mkswap (gchar *device, gchar *label, GError **error);
+gboolean bd_swap_mkswap (gchar *device, gchar *label, BDExtraArg **extra, GError **error);
 
 /**
  * bd_swap_swapon:
