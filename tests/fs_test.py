@@ -65,9 +65,9 @@ class Ext4TestMkfs(FSTestCase):
         """Verify that it is possible to create a new ext4 file system"""
 
         with self.assertRaises(GLib.GError):
-            BlockDev.fs_ext4_mkfs("/non/existing/device")
+            BlockDev.fs_ext4_mkfs("/non/existing/device", None)
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         # just try if we can mount the file system
@@ -80,7 +80,7 @@ class Ext4TestWipe(FSTestCase):
     def test_ext4_wipe(self):
         """Verify that it is possible to wipe an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         succ = BlockDev.fs_ext4_wipe(self.loop_dev)
@@ -110,46 +110,46 @@ class Ext4TestCheck(FSTestCase):
     def test_ext4_check(self):
         """Verify that it is possible to check an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
-        succ = BlockDev.fs_ext4_check(self.loop_dev)
+        succ = BlockDev.fs_ext4_check(self.loop_dev, None)
         self.assertTrue(succ)
 
         # mounted, but can be checked
         with mounted(self.loop_dev, self.mount_dir):
-            succ = BlockDev.fs_ext4_check(self.loop_dev)
+            succ = BlockDev.fs_ext4_check(self.loop_dev, None)
             self.assertTrue(succ)
 
-        succ = BlockDev.fs_ext4_check(self.loop_dev)
+        succ = BlockDev.fs_ext4_check(self.loop_dev, None)
         self.assertTrue(succ)
 
 class Ext4TestRepair(FSTestCase):
     def test_ext4_repair(self):
         """Verify that it is possible to repair an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
-        succ = BlockDev.fs_ext4_repair(self.loop_dev, False)
+        succ = BlockDev.fs_ext4_repair(self.loop_dev, False, None)
         self.assertTrue(succ)
 
         # unsafe operations should work here too
-        succ = BlockDev.fs_ext4_repair(self.loop_dev, True)
+        succ = BlockDev.fs_ext4_repair(self.loop_dev, True, None)
         self.assertTrue(succ)
 
         with mounted(self.loop_dev, self.mount_dir):
             with self.assertRaises(GLib.GError):
-                BlockDev.fs_ext4_repair(self.loop_dev, False)
+                BlockDev.fs_ext4_repair(self.loop_dev, False, None)
 
-        succ = BlockDev.fs_ext4_repair(self.loop_dev, False)
+        succ = BlockDev.fs_ext4_repair(self.loop_dev, False, None)
         self.assertTrue(succ)
 
 class Ext4GetInfo(FSTestCase):
     def test_ext4_get_info(self):
         """Verify that it is possible to get info about an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
@@ -178,7 +178,7 @@ class Ext4SetLabel(FSTestCase):
     def test_ext4_set_label(self):
         """Verify that it is possible to set label of an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
@@ -207,7 +207,7 @@ class Ext4Resize(FSTestCase):
     def test_ext4_resize(self):
         """Verify that it is possible to resize an ext4 file system"""
 
-        succ = BlockDev.fs_ext4_mkfs(self.loop_dev)
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
@@ -217,7 +217,7 @@ class Ext4Resize(FSTestCase):
         # at least 90 % should be available, so it should be reported
         self.assertGreater(fi.free_blocks, 0.90 * 100 * 1024**2 / 1024)
 
-        succ = BlockDev.fs_ext4_resize(self.loop_dev, 50 * 1024**2)
+        succ = BlockDev.fs_ext4_resize(self.loop_dev, 50 * 1024**2, None)
         self.assertTrue(succ)
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
         self.assertTrue(fi)
@@ -225,7 +225,7 @@ class Ext4Resize(FSTestCase):
         self.assertEqual(fi.block_count, 50 * 1024**2 / 1024)
 
         # resize back
-        succ = BlockDev.fs_ext4_resize(self.loop_dev, 100 * 1024**2)
+        succ = BlockDev.fs_ext4_resize(self.loop_dev, 100 * 1024**2, None)
         self.assertTrue(succ)
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
         self.assertTrue(fi)
@@ -235,7 +235,7 @@ class Ext4Resize(FSTestCase):
         self.assertGreater(fi.free_blocks, 0.90 * 100 * 1024**2 / 1024)
 
         # resize again
-        succ = BlockDev.fs_ext4_resize(self.loop_dev, 50 * 1024**2)
+        succ = BlockDev.fs_ext4_resize(self.loop_dev, 50 * 1024**2, None)
         self.assertTrue(succ)
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
         self.assertTrue(fi)
@@ -243,7 +243,7 @@ class Ext4Resize(FSTestCase):
         self.assertEqual(fi.block_count, 50 * 1024**2 / 1024)
 
         # resize back again, this time to maximum size
-        succ = BlockDev.fs_ext4_resize(self.loop_dev, 0)
+        succ = BlockDev.fs_ext4_resize(self.loop_dev, 0, None)
         self.assertTrue(succ)
         fi = BlockDev.fs_ext4_get_info(self.loop_dev)
         self.assertTrue(fi)
@@ -257,9 +257,9 @@ class XfsTestMkfs(FSTestCase):
         """Verify that it is possible to create a new xfs file system"""
 
         with self.assertRaises(GLib.GError):
-            BlockDev.fs_xfs_mkfs("/non/existing/device")
+            BlockDev.fs_xfs_mkfs("/non/existing/device", None)
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         # just try if we can mount the file system
@@ -272,7 +272,7 @@ class XfsTestWipe(FSTestCase):
     def test_xfs_wipe(self):
         """Verify that it is possible to wipe an xfs file system"""
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         succ = BlockDev.fs_xfs_wipe(self.loop_dev)
@@ -302,7 +302,7 @@ class XfsTestCheck(FSTestCase):
     def test_xfs_check(self):
         """Verify that it is possible to check an xfs file system"""
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         succ = BlockDev.fs_xfs_check(self.loop_dev)
@@ -321,24 +321,24 @@ class XfsTestRepair(FSTestCase):
     def test_xfs_repair(self):
         """Verify that it is possible to repair an xfs file system"""
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
-        succ = BlockDev.fs_xfs_repair(self.loop_dev)
+        succ = BlockDev.fs_xfs_repair(self.loop_dev, None)
         self.assertTrue(succ)
 
         with mounted(self.loop_dev, self.mount_dir):
             with self.assertRaises(GLib.GError):
-                BlockDev.fs_xfs_repair(self.loop_dev)
+                BlockDev.fs_xfs_repair(self.loop_dev, None)
 
-        succ = BlockDev.fs_xfs_repair(self.loop_dev)
+        succ = BlockDev.fs_xfs_repair(self.loop_dev, None)
         self.assertTrue(succ)
 
 class XfsGetInfo(FSTestCase):
     def test_xfs_get_info(self):
         """Verify that it is possible to get info about an xfs file system"""
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         with mounted(self.loop_dev, self.mount_dir):
@@ -354,7 +354,7 @@ class XfsSetLabel(FSTestCase):
     def test_xfs_set_label(self):
         """Verify that it is possible to set label of an xfs file system"""
 
-        succ = BlockDev.fs_xfs_mkfs(self.loop_dev)
+        succ = BlockDev.fs_xfs_mkfs(self.loop_dev, None)
         self.assertTrue(succ)
 
         with mounted(self.loop_dev, self.mount_dir):
@@ -397,7 +397,7 @@ class XfsResize(FSTestCase):
         self.addCleanup(self._destroy_lvm)
         lv = "/dev/libbd_fs_tests/xfs_test"
 
-        succ = BlockDev.fs_xfs_mkfs(lv)
+        succ = BlockDev.fs_xfs_mkfs(lv, None)
         self.assertTrue(succ)
 
         with mounted(lv, self.mount_dir):
@@ -407,7 +407,7 @@ class XfsResize(FSTestCase):
 
         # no change, nothing should happen
         with mounted(lv, self.mount_dir):
-            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0, None)
         self.assertTrue(succ)
 
         with mounted(lv, self.mount_dir):
@@ -418,12 +418,12 @@ class XfsResize(FSTestCase):
         # (still) impossible to shrink an XFS file system
         with mounted(lv, self.mount_dir):
             with self.assertRaises(GLib.GError):
-                succ = BlockDev.fs_xfs_resize(self.mount_dir, 40 * 1024**2 / fi.block_size)
+                succ = BlockDev.fs_xfs_resize(self.mount_dir, 40 * 1024**2 / fi.block_size, None)
 
         os.system("lvresize -L70M libbd_fs_tests/xfs_test &>/dev/null")
         # should grow
         with mounted(lv, self.mount_dir):
-            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0, None)
         self.assertTrue(succ)
         with mounted(lv, self.mount_dir):
             fi = BlockDev.fs_xfs_get_info(lv)
@@ -433,7 +433,7 @@ class XfsResize(FSTestCase):
         os.system("lvresize -L90M libbd_fs_tests/xfs_test &>/dev/null")
         # should grow just to 80 MiB
         with mounted(lv, self.mount_dir):
-            succ = BlockDev.fs_xfs_resize(self.mount_dir, 80 * 1024**2 / fi.block_size)
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 80 * 1024**2 / fi.block_size, None)
         self.assertTrue(succ)
         with mounted(lv, self.mount_dir):
             fi = BlockDev.fs_xfs_get_info(lv)
@@ -442,7 +442,7 @@ class XfsResize(FSTestCase):
 
         # should grow to 90 MiB
         with mounted(lv, self.mount_dir):
-            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0)
+            succ = BlockDev.fs_xfs_resize(self.mount_dir, 0, None)
         self.assertTrue(succ)
         with mounted(lv, self.mount_dir):
             fi = BlockDev.fs_xfs_get_info(lv)
