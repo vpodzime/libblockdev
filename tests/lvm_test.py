@@ -4,6 +4,7 @@ import os
 import math
 import overrides_hack
 import six
+import re
 
 from utils import create_sparse_tempfile, fake_utils, fake_path
 from gi.repository import BlockDev, GLib
@@ -556,6 +557,54 @@ class LvmTestLVcreateRemove(LvmPVVGLVTestCase):
         # already removed
         with self.assertRaises(GLib.GError):
             BlockDev.lvm_lvremove("testVG", "testLV", True, None)
+
+class LvmTestLVcreateWithExtra(LvmPVVGLVTestCase):
+    def __init__(self, *args, **kwargs):
+        LvmPVVGLVTestCase.__init__(self, *args, **kwargs)
+        self.log = ""
+        self.ignore_log = True
+
+    def my_log_func(self, level, msg):
+        if self.ignore_log:
+            return
+        # not much to verify here
+        self.assertTrue(isinstance(level, int))
+        self.assertTrue(isinstance(msg, str))
+
+        self.log += msg + "\n"
+
+    def test_lvcreate_with_extra(self):
+        """Verify that it's possible to create an LV with extra arguments"""
+
+        self.ignore_log = True
+        self.assertTrue(BlockDev.reinit(None, False, self.my_log_func))
+
+        succ = BlockDev.lvm_pvcreate(self.loop_dev, 0, 0, None)
+        self.assertTrue(succ)
+
+        succ = BlockDev.lvm_pvcreate(self.loop_dev2, 0, 0, None)
+        self.assertTrue(succ)
+
+        succ = BlockDev.lvm_vgcreate("testVG", [self.loop_dev, self.loop_dev2], 0, None)
+        self.assertTrue(succ)
+
+        with self.assertRaises(GLib.GError):
+            BlockDev.lvm_lvcreate("nonexistingVG", "testLV", 512 * 1024**2, None, [self.loop_dev], None)
+
+        with self.assertRaises(GLib.GError):
+            BlockDev.lvm_lvcreate("testVG", "testLV", 512 * 1024**2, None, ["/non/existing/device"], None)
+
+        self.ignore_log = False
+        ea = BlockDev.ExtraArg.new("-Z", "y")
+        succ = BlockDev.lvm_lvcreate("testVG", "testLV", 512 * 1024**2, None, [self.loop_dev], [ea])
+        self.assertTrue(succ)
+        match = re.match(r".*lvcreate.*-Z y.*", self.log)
+        self.assertIsNot(match, None)
+
+        self.assertTrue(BlockDev.reinit(None, False, None))
+
+        succ = BlockDev.lvm_lvremove("testVG", "testLV", True, None)
+        self.assertTrue(succ)
 
 class LvmTestLVcreateType(LvmPVVGLVTestCase):
     def test_lvcreate_type(self):

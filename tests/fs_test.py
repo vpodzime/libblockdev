@@ -76,6 +76,18 @@ class Ext4TestMkfs(FSTestCase):
 
         BlockDev.fs_wipe(self.loop_dev, True)
 
+class Ext4MkfsWithLabel(FSTestCase):
+    def test_ext4_mkfs_with_label(self):
+        """Verify that it is possible to create an ext4 file system with label"""
+
+        ea = BlockDev.ExtraArg.new("-L", "TEST_LABEL")
+        succ = BlockDev.fs_ext4_mkfs(self.loop_dev, [ea])
+        self.assertTrue(succ)
+
+        fi = BlockDev.fs_ext4_get_info(self.loop_dev)
+        self.assertTrue(fi)
+        self.assertEqual(fi.label, "TEST_LABEL")
+
 class Ext4TestWipe(FSTestCase):
     def test_ext4_wipe(self):
         """Verify that it is possible to wipe an ext4 file system"""
