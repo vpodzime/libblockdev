@@ -1,5 +1,6 @@
 #include <glib.h>
 #include <glib-object.h>
+#include <utils.h>
 
 #ifndef BD_KBD_API
 #define BD_KBD_API
