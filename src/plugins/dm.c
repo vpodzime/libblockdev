@@ -95,7 +95,7 @@ gboolean check() {
  */
 gboolean bd_dm_create_linear (const gchar *map_name, const gchar *device, guint64 length, const gchar *uuid, GError **error) {
     gboolean success = FALSE;
-    gchar *argv[9] = {"dmsetup", "create", map_name, "--table", NULL, NULL, NULL, NULL, NULL};
+    const gchar *argv[9] = {"dmsetup", "create", map_name, "--table", NULL, NULL, NULL, NULL, NULL};
 
     gchar *table = g_strdup_printf ("0 %"G_GUINT64_FORMAT" linear %s 0", length, device);
     argv[4] = table;
@@ -121,7 +121,7 @@ gboolean bd_dm_create_linear (const gchar *map_name, const gchar *device, guint6
  * Returns: whether the @map_name map was successfully removed or not
  */
 gboolean bd_dm_remove (const gchar *map_name, GError **error) {
-    gchar *argv[4] = {"dmsetup", "remove", map_name, NULL};
+    const gchar *argv[4] = {"dmsetup", "remove", map_name, NULL};
 
     return bd_utils_exec_and_report_error (argv, NULL, error);
 }
@@ -285,7 +285,7 @@ static struct lib_context* init_dmraid_stack (GError **error) {
      *      function? */
 
     /* initialize dmraid library context */
-    lc = libdmraid_init (1, (const gchar **)argv);
+    lc = libdmraid_init (1, (gchar **)argv);
 
     rc = discover_devices (lc, NULL);
     if (!rc) {
@@ -475,7 +475,7 @@ static gboolean change_set_by_name (const gchar *name, enum activate_type action
         return FALSE;
 
     for_each_raidset (lc, iter_rs) {
-        match_rs = find_in_raid_sets (iter_rs, (RSEvalFunc)rs_matches_name, name);
+        match_rs = find_in_raid_sets (iter_rs, (RSEvalFunc)rs_matches_name, (gchar *)name);
         if (match_rs)
             break;
     }
@@ -540,7 +540,7 @@ gchar* bd_dm_get_raid_set_type (const gchar *name, GError **error) {
         return NULL;
 
     for_each_raidset (lc, iter_rs) {
-        match_rs = find_in_raid_sets (iter_rs, (RSEvalFunc)rs_matches_name, name);
+        match_rs = find_in_raid_sets (iter_rs, (RSEvalFunc)rs_matches_name, (gchar *)name);
         if (match_rs)
             break;
     }
