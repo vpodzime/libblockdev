@@ -140,7 +140,7 @@ gchar* bd_loop_get_loop_name (const gchar *file, GError **error __attribute__((u
  * Returns: whether the @file was successfully setup as a loop device or not
  */
 gboolean bd_loop_setup (const gchar *file, const gchar **loop_name, GError **error) {
-    gchar *args[4] = {"losetup", "-f", file, NULL};
+    const gchar *args[4] = {"losetup", "-f", file, NULL};
     gboolean success = FALSE;
 
     success = bd_utils_exec_and_report_error (args, NULL, error);
@@ -164,7 +164,7 @@ gboolean bd_loop_teardown (const gchar *loop, GError **error) {
     gboolean success = FALSE;
     gchar *dev_loop = NULL;
 
-    gchar *args[4] = {"losetup", "-d", NULL, NULL};
+    const gchar *args[4] = {"losetup", "-d", NULL, NULL};
 
     if (g_str_has_prefix (loop, "/dev/"))
         args[2] = loop;
