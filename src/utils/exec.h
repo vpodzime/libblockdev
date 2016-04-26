@@ -25,9 +25,9 @@ typedef enum {
     BD_UTILS_EXEC_ERROR_UTIL_LOW_VER,
 } BDUtilsExecError;
 
-gboolean bd_utils_exec_and_report_error (const gchar **argv, BDExtraArg **extra, GError **error);
-gboolean bd_utils_exec_and_report_status_error (const gchar **argv, BDExtraArg **extra, gint *status, GError **error);
-gboolean bd_utils_exec_and_capture_output (const gchar **argv, BDExtraArg **extra, const gchar **output, GError **error);
+gboolean bd_utils_exec_and_report_error (const gchar **argv, const BDExtraArg **extra, GError **error);
+gboolean bd_utils_exec_and_report_status_error (const gchar **argv, const BDExtraArg **extra, gint *status, GError **error);
+gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg **extra, const gchar **output, GError **error);
 gboolean bd_utils_init_logging (BDUtilsLogFunc new_log_func, GError **error);
 gint bd_utils_version_cmp (const gchar *ver_string1, const gchar *ver_string2, GError **error);
 gboolean bd_utils_check_util_version (const gchar *util, const gchar *version, const gchar *version_arg, const gchar *version_regexp, GError **error);

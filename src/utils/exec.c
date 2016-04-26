@@ -138,7 +138,7 @@ static void set_c_locale(gpointer user_data __attribute__((unused))) {
  *
  * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
  */
-gboolean bd_utils_exec_and_report_error (const gchar **argv, BDExtraArg **extra, GError **error) {
+gboolean bd_utils_exec_and_report_error (const gchar **argv, const BDExtraArg **extra, GError **error) {
     gint status = 0;
     /* just use the "stronger" function and throw away the returned status */
     return bd_utils_exec_and_report_status_error (argv, extra, &status, error);
@@ -153,7 +153,7 @@ gboolean bd_utils_exec_and_report_error (const gchar **argv, BDExtraArg **extra,
  *
  * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
  */
-gboolean bd_utils_exec_and_report_status_error (const gchar **argv, BDExtraArg **extra, gint *status, GError **error) {
+gboolean bd_utils_exec_and_report_status_error (const gchar **argv, const BDExtraArg **extra, gint *status, GError **error) {
     gboolean success = FALSE;
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
@@ -229,7 +229,7 @@ gboolean bd_utils_exec_and_report_status_error (const gchar **argv, BDExtraArg *
  *
  * Returns: whether the @argv was successfully executed capturing the output or not
  */
-gboolean bd_utils_exec_and_capture_output (const gchar **argv, BDExtraArg **extra, const gchar **output, GError **error) {
+gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg **extra, const gchar **output, GError **error) {
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
     gint status = 0;

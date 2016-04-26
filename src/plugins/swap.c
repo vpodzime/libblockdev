@@ -83,7 +83,7 @@ gboolean check() {
  *
  * Returns: whether the swap space was successfully created or not
  */
-gboolean bd_swap_mkswap (const gchar *device, const gchar *label, BDExtraArg **extra, GError **error) {
+gboolean bd_swap_mkswap (const gchar *device, const gchar *label, const BDExtraArg **extra, GError **error) {
     guint8 next_arg = 2;
 
     /* We use -f to force since mkswap tends to refuse creation on lvs with

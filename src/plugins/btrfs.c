@@ -184,7 +184,7 @@ static BDBtrfsFilesystemInfo* get_filesystem_info_from_match (GMatchInfo *match_
  *
  * See mkfs.btrfs(8) for details about @data_level, @md_level and btrfs in general.
  */
-gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, const BDExtraArg **extra, GError **error) {
     gchar **device_p = NULL;
     guint8 num_args = 0;
     gchar **argv = NULL;
@@ -251,7 +251,7 @@ gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, cons
  *
  * Returns: whether the @device was successfully added to the @mountpoint btrfs volume or not
  */
-gboolean bd_btrfs_add_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_add_device (const gchar *mountpoint, const gchar *device, const BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "device", "add", device, mountpoint, NULL};
     return bd_utils_exec_and_report_error (argv, extra, error);
 }
@@ -266,7 +266,7 @@ gboolean bd_btrfs_add_device (const gchar *mountpoint, const gchar *device, BDEx
  *
  * Returns: whether the @device was successfully removed from the @mountpoint btrfs volume or not
  */
-gboolean bd_btrfs_remove_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_remove_device (const gchar *mountpoint, const gchar *device, const BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "device", "delete", device, mountpoint, NULL};
     return bd_utils_exec_and_report_error (argv, extra, error);
 }
@@ -281,7 +281,7 @@ gboolean bd_btrfs_remove_device (const gchar *mountpoint, const gchar *device, B
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully created or not
  */
-gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, const gchar *name, const BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "create", NULL, NULL};
@@ -308,7 +308,7 @@ gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, const gchar *name, 
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully deleted or not
  */
-gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, const gchar *name, const BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "delete", NULL, NULL};
@@ -386,7 +386,7 @@ guint64 bd_btrfs_get_default_subvolume_id (const gchar *mountpoint, GError **err
  * Returns: whether the @mountpoint volume's default subvolume was correctly set
  * to @subvol_id or not
  */
-gboolean bd_btrfs_set_default_subvolume (const gchar *mountpoint, guint64 subvol_id, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_set_default_subvolume (const gchar *mountpoint, guint64 subvol_id, const BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "subvol", "set-default", NULL, mountpoint, NULL};
     gboolean ret = FALSE;
 
@@ -408,7 +408,7 @@ gboolean bd_btrfs_set_default_subvolume (const gchar *mountpoint, guint64 subvol
  *
  * Returns: whether the @dest snapshot of @source was successfully created or not
  */
-gboolean bd_btrfs_create_snapshot (const gchar *source, const gchar *dest, gboolean ro, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_snapshot (const gchar *source, const gchar *dest, gboolean ro, const BDExtraArg **extra, GError **error) {
     gchar *argv[7] = {"btrfs", "subvol", "snapshot", NULL, NULL, NULL, NULL};
     guint next_arg = 3;
 
@@ -661,7 +661,7 @@ BDBtrfsFilesystemInfo* bd_btrfs_filesystem_info (const gchar *device, GError **e
  *
  * See mkfs.btrfs(8) for details about @data_level, @md_level and btrfs in general.
  */
-gboolean bd_btrfs_mkfs (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_mkfs (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, const BDExtraArg **extra, GError **error) {
     return bd_btrfs_create_volume (devices, label, data_level, md_level, extra, error);
 }
 
@@ -676,7 +676,7 @@ gboolean bd_btrfs_mkfs (const gchar **devices, const gchar *label, const gchar *
  * Returns: whether the @mountpoint filesystem was successfully resized to @size
  * or not
  */
-gboolean bd_btrfs_resize (const gchar *mountpoint, guint64 size, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_resize (const gchar *mountpoint, guint64 size, const BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "filesystem", "resize", NULL, mountpoint, NULL};
     gboolean ret = FALSE;
 
@@ -696,7 +696,7 @@ gboolean bd_btrfs_resize (const gchar *mountpoint, guint64 size, BDExtraArg **ex
  *
  * Returns: whether the filesystem was successfully checked or not
  */
-gboolean bd_btrfs_check (const gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_check (const gchar *device, const BDExtraArg **extra, GError **error) {
     gchar *argv[4] = {"btrfs", "check", device, NULL};
 
     return bd_utils_exec_and_report_error (argv, extra, error);
@@ -711,7 +711,7 @@ gboolean bd_btrfs_check (const gchar *device, BDExtraArg **extra, GError **error
  *
  * Returns: whether the filesystem was successfully checked and repaired or not
  */
-gboolean bd_btrfs_repair (const gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_repair (const gchar *device, const BDExtraArg **extra, GError **error) {
     gchar *argv[5] = {"btrfs", "check", "--repair", device, NULL};
 
     return bd_utils_exec_and_report_error (argv, extra, error);

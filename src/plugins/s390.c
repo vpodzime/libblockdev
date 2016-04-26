@@ -68,7 +68,7 @@ gboolean check() {
  *
  * Returns: whether dasdfmt was successful or not
  */
-gboolean bd_s390_dasd_format (const gchar *dasd, BDExtraArg **extra, GError **error) {
+gboolean bd_s390_dasd_format (const gchar *dasd, const BDExtraArg **extra, GError **error) {
     gboolean rc = FALSE;
     gchar *dev = g_strdup_printf ("/dev/%s", dasd);
     gchar *argv[] = {"/sbin/dasdfmt", "-y", "-d", "cdl", "-b", "4096", dev, NULL};
