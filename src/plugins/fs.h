@@ -40,7 +40,7 @@ gboolean bd_fs_ext4_mkfs (const gchar *device, BDExtraArg **extra, GError **erro
 gboolean bd_fs_ext4_wipe (const gchar *device, GError **error);
 gboolean bd_fs_ext4_check (const gchar *device, BDExtraArg **extra, GError **error);
 gboolean bd_fs_ext4_repair (const gchar *device, gboolean unsafe, BDExtraArg **extra, GError **error);
-gboolean bd_fs_ext4_set_label (const gchar *device, gchar *label, GError **error);
+gboolean bd_fs_ext4_set_label (const gchar *device, const gchar *label, GError **error);
 BDFSExt4Info* bd_fs_ext4_get_info (const gchar *device, GError **error);
 gboolean bd_fs_ext4_resize (const gchar *device, guint64 new_size, BDExtraArg **extra, GError **error);
 
@@ -48,7 +48,7 @@ gboolean bd_fs_xfs_mkfs (const gchar *device, BDExtraArg **extra, GError **error
 gboolean bd_fs_xfs_wipe (const gchar *device, GError **error);
 gboolean bd_fs_xfs_check (const gchar *device, GError **error);
 gboolean bd_fs_xfs_repair (const gchar *device, BDExtraArg **extra, GError **error);
-gboolean bd_fs_xfs_set_label (const gchar *device, gchar *label, GError **error);
+gboolean bd_fs_xfs_set_label (const gchar *device, const gchar *label, GError **error);
 BDFSXfsInfo* bd_fs_xfs_get_info (const gchar *device, GError **error);
 gboolean bd_fs_xfs_resize (const gchar *mpoint, guint64 new_size, BDExtraArg **extra, GError **error);
 

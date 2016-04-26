@@ -150,7 +150,7 @@ gboolean check() {
  * Returns: (transfer full): GHashTable containing the key-value pairs parsed
  * from the @str.
  */
-static GHashTable* parse_mdadm_vars (const gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
+static GHashTable* parse_mdadm_vars (const gchar *str, const gchar *item_sep, const gchar *key_val_sep, guint *num_items) {
     GHashTable *table = NULL;
     gchar **items = NULL;
     gchar **item_p = NULL;
@@ -340,7 +340,7 @@ static BDMDDetailData* get_detail_data_from_table (GHashTable *table, gboolean f
  * Returns: Calculated superblock size for an array with a given @member_size
  * and metadata @version or default if unsupported @version is used.
  */
-guint64 bd_md_get_superblock_size (guint64 member_size, gchar *version, GError **error __attribute__((unused))) {
+guint64 bd_md_get_superblock_size (guint64 member_size, const gchar *version, GError **error __attribute__((unused))) {
     guint64 headroom = BD_MD_SUPERBLOCK_SIZE;
     guint64 min_headroom = (1 MiB);
 
@@ -375,7 +375,7 @@ guint64 bd_md_get_superblock_size (guint64 member_size, gchar *version, GError *
  *
  * Returns: whether the new MD RAID device @device_name was successfully created or not
  */
-gboolean bd_md_create (const gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, BDExtraArg **extra, GError **error) {
+gboolean bd_md_create (const gchar *device_name, const gchar *level, const gchar **disks, guint64 spares, const gchar *version, gboolean bitmap, BDExtraArg **extra, GError **error) {
     gchar **argv = NULL;
     /* ["mdadm", "create", device, "--run", "level", "raid-devices",...] */
     guint argv_len = 6;
@@ -450,7 +450,7 @@ gboolean bd_md_create (const gchar *device_name, gchar *level, gchar **disks, gu
  *
  * Returns: whether the new MD RAID device @device_name was successfully created or not
  */
-gboolean bd_md_create_with_chunk_size (const gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, guint64 chunk_size, BDExtraArg **extra, GError **error) {
+gboolean bd_md_create_with_chunk_size (const gchar *device_name, const gchar *level, const gchar **disks, guint64 spares, const gchar *version, gboolean bitmap, guint64 chunk_size, BDExtraArg **extra, GError **error) {
     gchar **argv = NULL;
     /* {"mdadm", "create", device, "--run", "level", "raid-devices",...} */
     guint argv_len = 6;
@@ -569,7 +569,7 @@ gboolean bd_md_deactivate (const gchar *device_name, GError **error) {
  *
  * Note: either @members or @uuid (or both) have to be specified.
  */
-gboolean bd_md_activate (const gchar *device_name, gchar **members, gchar *uuid, BDExtraArg **extra, GError **error) {
+gboolean bd_md_activate (const gchar *device_name, const gchar **members, const gchar *uuid, BDExtraArg **extra, GError **error) {
     guint64 num_members = members ? g_strv_length (members) : 0;
     gchar **argv = NULL;
     gchar *uuid_str = NULL;
@@ -682,7 +682,7 @@ gboolean bd_md_denominate (const gchar *device, GError **error) {
  * Whether the new device will be added as a spare or an active member is
  * decided by mdadm.
  */
-gboolean bd_md_add (const gchar *raid_name, gchar *device, guint64 raid_devs, BDExtraArg **extra, GError **error) {
+gboolean bd_md_add (const gchar *raid_name, const gchar *device, guint64 raid_devs, BDExtraArg **extra, GError **error) {
     gchar *argv[7] = {"mdadm", NULL, NULL, NULL, NULL, NULL, NULL};
     guint argv_top = 1;
     gchar *raid_name_str = NULL;
@@ -723,7 +723,7 @@ gboolean bd_md_add (const gchar *raid_name, gchar *device, guint64 raid_devs, BD
  * Returns: whether the @device was successfully removed from the @raid_name
  * RAID or not.
  */
-gboolean bd_md_remove (const gchar *raid_name, gchar *device, gboolean fail, BDExtraArg **extra, GError **error) {
+gboolean bd_md_remove (const gchar *raid_name, const gchar *device, gboolean fail, BDExtraArg **extra, GError **error) {
     gchar *argv[] = {"mdadm", raid_name, NULL, NULL, NULL, NULL};
     guint argv_top = 2;
     gchar *raid_name_str = NULL;

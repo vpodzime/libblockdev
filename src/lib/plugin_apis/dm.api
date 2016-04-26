@@ -21,7 +21,7 @@ typedef enum {
  * Returns: whether the new linear mapping @map_name was successfully created
  * for the @device or not
  */
-gboolean bd_dm_create_linear (const gchar *map_name, gchar *device, guint64 length, gchar *uuid, GError **error);
+gboolean bd_dm_create_linear (const gchar *map_name, const gchar *device, guint64 length, const gchar *uuid, GError **error);
 
 /**
  * bd_dm_remove:
@@ -77,7 +77,7 @@ gboolean bd_dm_map_exists (const gchar *map_name, gboolean live_only, gboolean a
  *
  * One of @name, @uuid or @major:@minor has to be given.
  */
-gchar** bd_dm_get_member_raid_sets (const gchar *name, gchar *uuid, gint major, gint minor, GError **error);
+gchar** bd_dm_get_member_raid_sets (const gchar *name, const gchar *uuid, gint major, gint minor, GError **error);
 
 /**
  * bd_dm_activate_raid_set:

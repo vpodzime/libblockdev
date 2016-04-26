@@ -184,7 +184,7 @@ static BDBtrfsFilesystemInfo* get_filesystem_info_from_match (GMatchInfo *match_
  *
  * See mkfs.btrfs(8) for details about @data_level, @md_level and btrfs in general.
  */
-gboolean bd_btrfs_create_volume (const gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error) {
     gchar **device_p = NULL;
     guint8 num_args = 0;
     gchar **argv = NULL;
@@ -251,7 +251,7 @@ gboolean bd_btrfs_create_volume (const gchar **devices, gchar *label, gchar *dat
  *
  * Returns: whether the @device was successfully added to the @mountpoint btrfs volume or not
  */
-gboolean bd_btrfs_add_device (const gchar *mountpoint, gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_add_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "device", "add", device, mountpoint, NULL};
     return bd_utils_exec_and_report_error (argv, extra, error);
 }
@@ -266,7 +266,7 @@ gboolean bd_btrfs_add_device (const gchar *mountpoint, gchar *device, BDExtraArg
  *
  * Returns: whether the @device was successfully removed from the @mountpoint btrfs volume or not
  */
-gboolean bd_btrfs_remove_device (const gchar *mountpoint, gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_remove_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error) {
     gchar *argv[6] = {"btrfs", "device", "delete", device, mountpoint, NULL};
     return bd_utils_exec_and_report_error (argv, extra, error);
 }
@@ -281,7 +281,7 @@ gboolean bd_btrfs_remove_device (const gchar *mountpoint, gchar *device, BDExtra
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully created or not
  */
-gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "create", NULL, NULL};
@@ -308,7 +308,7 @@ gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, gchar *name, BDExtr
  *
  * Returns: whether the @mountpoint/@name subvolume was successfully deleted or not
  */
-gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
     gchar *argv[5] = {"btrfs", "subvol", "delete", NULL, NULL};
@@ -408,7 +408,7 @@ gboolean bd_btrfs_set_default_subvolume (const gchar *mountpoint, guint64 subvol
  *
  * Returns: whether the @dest snapshot of @source was successfully created or not
  */
-gboolean bd_btrfs_create_snapshot (const gchar *source, gchar *dest, gboolean ro, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_create_snapshot (const gchar *source, const gchar *dest, gboolean ro, BDExtraArg **extra, GError **error) {
     gchar *argv[7] = {"btrfs", "subvol", "snapshot", NULL, NULL, NULL, NULL};
     guint next_arg = 3;
 
@@ -661,7 +661,7 @@ BDBtrfsFilesystemInfo* bd_btrfs_filesystem_info (const gchar *device, GError **e
  *
  * See mkfs.btrfs(8) for details about @data_level, @md_level and btrfs in general.
  */
-gboolean bd_btrfs_mkfs (const gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **extra, GError **error) {
+gboolean bd_btrfs_mkfs (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error) {
     return bd_btrfs_create_volume (devices, label, data_level, md_level, extra, error);
 }
 
@@ -726,7 +726,7 @@ gboolean bd_btrfs_repair (const gchar *device, BDExtraArg **extra, GError **erro
  * Returns: whether the label of the @mountpoint filesystem was successfully set
  * to @label or not
  */
-gboolean bd_btrfs_change_label (const gchar *mountpoint, gchar *label, GError **error) {
+gboolean bd_btrfs_change_label (const gchar *mountpoint, const gchar *label, GError **error) {
     gchar *argv[6] = {"btrfs", "filesystem", "label", mountpoint, label, NULL};
 
     return bd_utils_exec_and_report_error (argv, NULL, error);

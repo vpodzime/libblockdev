@@ -93,7 +93,7 @@ gboolean check() {
  * Returns: whether the new linear mapping @map_name was successfully created
  * for the @device or not
  */
-gboolean bd_dm_create_linear (const gchar *map_name, gchar *device, guint64 length, gchar *uuid, GError **error) {
+gboolean bd_dm_create_linear (const gchar *map_name, const gchar *device, guint64 length, const gchar *uuid, GError **error) {
     gboolean success = FALSE;
     gchar *argv[9] = {"dmsetup", "create", map_name, "--table", NULL, NULL, NULL, NULL, NULL};
 
@@ -320,7 +320,7 @@ static struct lib_context* init_dmraid_stack (GError **error) {
  * Returns: whether the device specified by @sysname matches the spec given by @name,
  *          @uuid, @major and @minor
  */
-static gboolean raid_dev_matches_spec (struct raid_dev *raid_dev, gchar *name, gchar *uuid, gint major, gint minor) {
+static gboolean raid_dev_matches_spec (struct raid_dev *raid_dev, const gchar *name, const gchar *uuid, gint major, gint minor) {
     gchar const *dev_name = NULL;
     gchar const *dev_uuid;
     gchar const *major_str;
@@ -372,7 +372,7 @@ static gboolean raid_dev_matches_spec (struct raid_dev *raid_dev, gchar *name, g
 /**
  * find_raid_sets_for_dev: (skip)
  */
-static void find_raid_sets_for_dev (const gchar *name, gchar *uuid, gint major, gint minor, struct lib_context *lc, struct raid_set *rs, GPtrArray *ret_sets) {
+static void find_raid_sets_for_dev (const gchar *name, const gchar *uuid, gint major, gint minor, struct lib_context *lc, struct raid_set *rs, GPtrArray *ret_sets) {
     struct raid_set *subset;
     struct raid_dev *dev;
 
@@ -400,7 +400,7 @@ static void find_raid_sets_for_dev (const gchar *name, gchar *uuid, gint major, 
  *
  * One of @name, @uuid or @major:@minor has to be given.
  */
-gchar** bd_dm_get_member_raid_sets (const gchar *name, gchar *uuid, gint major, gint minor, GError **error) {
+gchar** bd_dm_get_member_raid_sets (const gchar *name, const gchar *uuid, gint major, gint minor, GError **error) {
     guint64 i = 0;
     struct lib_context *lc = NULL;
     struct raid_set *rs = NULL;

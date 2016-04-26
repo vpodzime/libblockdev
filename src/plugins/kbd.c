@@ -163,7 +163,7 @@ static gboolean have_kernel_module (const gchar *module_name, GError **error) {
     return have_path;
 }
 
-static gboolean load_kernel_module (const gchar *module_name, gchar *options, GError **error) {
+static gboolean load_kernel_module (const gchar *module_name, const gchar *options, GError **error) {
     gint ret = 0;
     struct kmod_ctx *ctx = NULL;
     struct kmod_module *mod = NULL;
@@ -267,7 +267,7 @@ static gboolean unload_kernel_module (const gchar *module_name, GError **error) 
     return TRUE;
 }
 
-static gboolean echo_str_to_file (const gchar *str, gchar *file_path, GError **error) {
+static gboolean echo_str_to_file (const gchar *str, const gchar *file_path, GError **error) {
     GIOChannel *out_file = NULL;
     gsize bytes_written = 0;
 
@@ -545,7 +545,7 @@ BDKBDZramStats* bd_kbd_zram_get_stats (const gchar *device, GError **error) {
  *
  * Returns: whether the bcache device was successfully created or not
  */
-gboolean bd_kbd_bcache_create (const gchar *backing_device, gchar *cache_device, BDExtraArg **extra, gchar **bcache_device, GError **error) {
+gboolean bd_kbd_bcache_create (const gchar *backing_device, const gchar *cache_device, BDExtraArg **extra, const gchar **bcache_device, GError **error) {
     gchar *argv[6] = {"make-bcache", "-B", backing_device, "-C", cache_device, NULL};
     gboolean success = FALSE;
     gchar *output = NULL;
@@ -665,7 +665,7 @@ gboolean bd_kbd_bcache_create (const gchar *backing_device, gchar *cache_device,
  *
  * Returns: whether the @c_set_uuid cache was successfully attached to @bcache_device or not
  */
-gboolean bd_kbd_bcache_attach (const gchar *c_set_uuid, gchar *bcache_device, GError **error) {
+gboolean bd_kbd_bcache_attach (const gchar *c_set_uuid, const gchar *bcache_device, GError **error) {
     gchar *path = NULL;
     gboolean success = FALSE;
 
@@ -689,7 +689,7 @@ gboolean bd_kbd_bcache_attach (const gchar *c_set_uuid, gchar *bcache_device, GE
  *
  * Note: Flushes the cache first.
  */
-gboolean bd_kbd_bcache_detach (const gchar *bcache_device, gchar **c_set_uuid, GError **error) {
+gboolean bd_kbd_bcache_detach (const gchar *bcache_device, const gchar **c_set_uuid, GError **error) {
     gchar *path = NULL;
     gchar *link = NULL;
     gchar *uuid = NULL;

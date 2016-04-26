@@ -198,7 +198,7 @@ gboolean bd_fs_wipe (const gchar *device, gboolean all, GError **error) {
     return TRUE;
 }
 
-static gboolean wipe_fs (const gchar *device, gchar *fs_type, GError **error) {
+static gboolean wipe_fs (const gchar *device, const gchar *fs_type, GError **error) {
     blkid_probe probe = NULL;
     gint fd = 0;
     gint status = 0;
@@ -375,7 +375,7 @@ gboolean bd_fs_ext4_repair (const gchar *device, gboolean unsafe, BDExtraArg **e
  * Returns: whether the label of ext4 file system on the @device was
  *          successfully set or not
  */
-gboolean bd_fs_ext4_set_label (const gchar *device, gchar *label, GError **error) {
+gboolean bd_fs_ext4_set_label (const gchar *device, const gchar *label, GError **error) {
     gchar *args[5] = {"tune2fs", "-L", label, device, NULL};
 
     return bd_utils_exec_and_report_error (args, NULL, error);
@@ -391,7 +391,7 @@ gboolean bd_fs_ext4_set_label (const gchar *device, gchar *label, GError **error
  * Returns: (transfer full): GHashTable containing the key-value pairs parsed
  * from the @str.
  */
-static GHashTable* parse_output_vars (const gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
+static GHashTable* parse_output_vars (const gchar *str, const gchar *item_sep, const gchar *key_val_sep, guint *num_items) {
     GHashTable *table = NULL;
     gchar **items = NULL;
     gchar **item_p = NULL;
@@ -587,7 +587,7 @@ gboolean bd_fs_xfs_repair (const gchar *device, BDExtraArg **extra, GError **err
  * Returns: whether the label of xfs file system on the @device was
  *          successfully set or not
  */
-gboolean bd_fs_xfs_set_label (const gchar *device, gchar *label, GError **error) {
+gboolean bd_fs_xfs_set_label (const gchar *device, const gchar *label, GError **error) {
     gchar *args[5] = {"xfs_admin", "-L", label, device, NULL};
     if (!label || (strncmp (label, "", 1) == 0))
         args[2] = "--";

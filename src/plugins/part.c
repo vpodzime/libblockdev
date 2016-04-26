@@ -94,7 +94,7 @@ gboolean init() {
 
 static const gchar *table_type_str[BD_PART_TABLE_UNDEF] = {"msdos", "gpt"};
 
-static gboolean disk_commit (PedDisk *disk, gchar *path, GError **error) {
+static gboolean disk_commit (PedDisk *disk, const gchar *path, GError **error) {
     gint ret = 0;
 
     ret = ped_disk_commit_to_dev (disk);
@@ -202,7 +202,7 @@ static BDPartSpec* get_part_spec (PedDevice *dev, PedPartition *part) {
  *
  * Returns: spec of the @part partition from @disk or %NULL in case of error
  */
-BDPartSpec* bd_part_get_part_spec (const gchar *disk, gchar *part, GError **error) {
+BDPartSpec* bd_part_get_part_spec (const gchar *disk, const gchar *part, GError **error) {
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
@@ -473,7 +473,7 @@ BDPartSpec* bd_part_create_part (const gchar *disk, BDPartTypeReq type, guint64 
  *
  * Returns: whether the @part partition was successfully deleted from @disk
  */
-gboolean bd_part_delete_part (const gchar *disk, gchar *part, GError **error) {
+gboolean bd_part_delete_part (const gchar *disk, const gchar *part, GError **error) {
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
@@ -556,7 +556,7 @@ gboolean bd_part_delete_part (const gchar *disk, gchar *part, GError **error) {
  * Returns: whether the flag @flag was successfully set on the @part partition
  * or not.
  */
-gboolean bd_part_set_part_flag (const gchar *disk, gchar *part, BDPartFlag flag, gboolean state, GError **error) {
+gboolean bd_part_set_part_flag (const gchar *disk, const gchar *part, BDPartFlag flag, gboolean state, GError **error) {
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;

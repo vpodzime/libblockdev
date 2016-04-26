@@ -139,7 +139,7 @@ gchar* bd_loop_get_loop_name (const gchar *file, GError **error __attribute__((u
  *
  * Returns: whether the @file was successfully setup as a loop device or not
  */
-gboolean bd_loop_setup (const gchar *file, gchar **loop_name, GError **error) {
+gboolean bd_loop_setup (const gchar *file, const gchar **loop_name, GError **error) {
     gchar *args[4] = {"losetup", "-f", file, NULL};
     gboolean success = FALSE;
 

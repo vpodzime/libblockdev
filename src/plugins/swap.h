@@ -14,7 +14,7 @@ typedef enum {
     BD_SWAP_ERROR_ACTIVATE,
 } BDSwapError;
 
-gboolean bd_swap_mkswap (const gchar *device, gchar *label, BDExtraArg **extra, GError **error);
+gboolean bd_swap_mkswap (const gchar *device, const gchar *label, BDExtraArg **extra, GError **error);
 gboolean bd_swap_swapon (const gchar *device, gint priority, GError **error);
 gboolean bd_swap_swapoff (const gchar *device, GError **error);
 gboolean bd_swap_swapstatus (const gchar *device, GError **error);

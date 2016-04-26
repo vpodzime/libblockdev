@@ -46,22 +46,22 @@ typedef struct BDBtrfsFilesystemInfo {
 void bd_btrfs_filesystem_info_free (BDBtrfsFilesystemInfo *info);
 BDBtrfsFilesystemInfo* bd_btrfs_filesystem_info_copy (BDBtrfsFilesystemInfo *info);
 
-gboolean bd_btrfs_create_volume (const gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_add_device (const gchar *mountpoint, gchar *device, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_remove_device (const gchar *mountpoint, gchar *device, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, gchar *name, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_add_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_remove_device (const gchar *mountpoint, const gchar *device, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_create_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_delete_subvolume (const gchar *mountpoint, const gchar *name, BDExtraArg **extra, GError **error);
 guint64 bd_btrfs_get_default_subvolume_id (const gchar *mountpoint, GError **error);
 gboolean bd_btrfs_set_default_subvolume (const gchar *mountpoint, guint64 subvol_id, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_create_snapshot (const gchar *source, gchar *dest, gboolean ro, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_create_snapshot (const gchar *source, const gchar *dest, gboolean ro, BDExtraArg **extra, GError **error);
 BDBtrfsDeviceInfo** bd_btrfs_list_devices (const gchar *device, GError **error);
 BDBtrfsSubvolumeInfo** bd_btrfs_list_subvolumes (const gchar *mountpoint, gboolean snapshots_only, GError **error);
 BDBtrfsFilesystemInfo* bd_btrfs_filesystem_info (const gchar *device, GError **error);
 
-gboolean bd_btrfs_mkfs (const gchar **devices, gchar *label, gchar *data_level, gchar *md_level, BDExtraArg **extra, GError **error);
+gboolean bd_btrfs_mkfs (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, BDExtraArg **extra, GError **error);
 gboolean bd_btrfs_resize (const gchar *mountpoint, guint64 size, BDExtraArg **extra, GError **error);
 gboolean bd_btrfs_check (const gchar *device, BDExtraArg **extra, GError **error);
 gboolean bd_btrfs_repair (const gchar *device, BDExtraArg **extra, GError **error);
-gboolean bd_btrfs_change_label (const gchar *mountpoint, gchar *label, GError **error);
+gboolean bd_btrfs_change_label (const gchar *mountpoint, const gchar *label, GError **error);
 
 #endif  /* BD_BTRFS */
