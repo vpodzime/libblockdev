@@ -79,7 +79,7 @@ static guint64 log_running (const gchar **argv) {
     task_id = get_next_task_id ();
 
     if (log_func) {
-        str_argv = g_strjoinv (" ", argv);
+        str_argv = g_strjoinv (" ", (gchar **) argv);
         log_msg = g_strdup_printf ("Running [%"G_GUINT64_FORMAT"] %s ...", task_id, str_argv);
         log_func (LOG_INFO, log_msg);
         g_free (str_argv);
@@ -158,21 +158,21 @@ gboolean bd_utils_exec_and_report_status_error (const gchar **argv, const BDExtr
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
     guint64 task_id = 0;
-    gchar **args = NULL;
+    const gchar **args = NULL;
     guint args_len = 0;
-    gchar **arg_p = NULL;
-    BDExtraArg **extra_p = NULL;
+    const gchar **arg_p = NULL;
+    const BDExtraArg **extra_p = NULL;
     guint i = 0;
 
     if (extra) {
-        args_len = g_strv_length (argv);
+        args_len = g_strv_length ((gchar **) argv);
         for (extra_p=extra; *extra_p; extra_p++) {
             if ((*extra_p)->opt && (g_strcmp0 ((*extra_p)->opt, "") != 0))
                 args_len++;
             if ((*extra_p)->val && (g_strcmp0 ((*extra_p)->val, "") != 0))
                 args_len++;
         }
-        args = g_new0 (gchar*, args_len + 1);
+        args = g_new0 (const gchar*, args_len + 1);
         for (arg_p=argv; *arg_p; arg_p++, i++)
             args[i] = *arg_p;
         for (extra_p=extra; *extra_p; extra_p++) {
@@ -189,7 +189,7 @@ gboolean bd_utils_exec_and_report_status_error (const gchar **argv, const BDExtr
     }
 
     task_id = log_running (args ? args : argv);
-    success = g_spawn_sync (NULL, args ? args : argv, NULL, G_SPAWN_SEARCH_PATH,
+    success = g_spawn_sync (NULL, args ? (gchar **) args : (gchar **) argv, NULL, G_SPAWN_SEARCH_PATH,
                             (GSpawnChildSetupFunc) set_c_locale, NULL,
                             &stdout_data, &stderr_data, status, error);
     log_out (task_id, stdout_data, stderr_data);
@@ -235,21 +235,21 @@ gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg 
     gint status = 0;
     gboolean success = FALSE;
     guint64 task_id = 0;
-    gchar **args = NULL;
+    const gchar **args = NULL;
     guint args_len = 0;
-    gchar **arg_p = NULL;
-    BDExtraArg **extra_p = NULL;
+    const gchar **arg_p = NULL;
+    const BDExtraArg **extra_p = NULL;
     guint i = 0;
 
     if (extra) {
-        args_len = g_strv_length (argv);
+        args_len = g_strv_length ((gchar **) argv);
         for (extra_p=extra; *extra_p; extra_p++) {
             if ((*extra_p)->opt && (g_strcmp0 ((*extra_p)->opt, "") != 0))
                 args_len++;
             if ((*extra_p)->val && (g_strcmp0 ((*extra_p)->val, "") != 0))
                 args_len++;
         }
-        args = g_new0 (gchar*, args_len + 1);
+        args = g_new0 (const gchar*, args_len + 1);
         for (arg_p=argv; *arg_p; arg_p++, i++)
             args[i] = *arg_p;
         for (extra_p=extra; *extra_p; extra_p++) {
@@ -266,7 +266,7 @@ gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg 
     }
 
     task_id = log_running (argv);
-    success = g_spawn_sync (NULL, argv, NULL, G_SPAWN_SEARCH_PATH,
+    success = g_spawn_sync (NULL, (gchar **) argv, NULL, G_SPAWN_SEARCH_PATH,
                             (GSpawnChildSetupFunc) set_c_locale, NULL,
                             &stdout_data, &stderr_data, &status, error);
     log_out (task_id, stdout_data, stderr_data);
@@ -403,7 +403,7 @@ gint bd_utils_version_cmp (const gchar *ver_string1, const gchar *ver_string2, G
  */
 gboolean bd_utils_check_util_version (const gchar *util, const gchar *version, const gchar *version_arg, const gchar *version_regexp, GError **error) {
     gchar *util_path = NULL;
-    gchar *argv[] = {util, version_arg ? version_arg : "--version", NULL};
+    const gchar *argv[] = {util, version_arg ? version_arg : "--version", NULL};
     gchar *output = NULL;
     gboolean succ = FALSE;
     GRegex *regex = NULL;
