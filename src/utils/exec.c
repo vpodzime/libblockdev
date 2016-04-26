@@ -229,7 +229,7 @@ gboolean bd_utils_exec_and_report_status_error (const gchar **argv, const BDExtr
  *
  * Returns: whether the @argv was successfully executed capturing the output or not
  */
-gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg **extra, const gchar **output, GError **error) {
+gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg **extra, gchar **output, GError **error) {
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
     gint status = 0;
