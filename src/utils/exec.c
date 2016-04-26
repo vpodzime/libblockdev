@@ -71,7 +71,7 @@ void log_task_status (guint64 task_id, gchar *msg) {
  *
  * Returns: id of the running task
  */
-static guint64 log_running (gchar **argv) {
+static guint64 log_running (const gchar **argv) {
     guint64 task_id = 0;
     gchar *str_argv = NULL;
     gchar *log_msg = NULL;
@@ -138,7 +138,7 @@ static void set_c_locale(gpointer user_data __attribute__((unused))) {
  *
  * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
  */
-gboolean bd_utils_exec_and_report_error (gchar **argv, BDExtraArg **extra, GError **error) {
+gboolean bd_utils_exec_and_report_error (const gchar **argv, BDExtraArg **extra, GError **error) {
     gint status = 0;
     /* just use the "stronger" function and throw away the returned status */
     return bd_utils_exec_and_report_status_error (argv, extra, &status, error);
@@ -153,7 +153,7 @@ gboolean bd_utils_exec_and_report_error (gchar **argv, BDExtraArg **extra, GErro
  *
  * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
  */
-gboolean bd_utils_exec_and_report_status_error (gchar **argv, BDExtraArg **extra, gint *status, GError **error) {
+gboolean bd_utils_exec_and_report_status_error (const gchar **argv, BDExtraArg **extra, gint *status, GError **error) {
     gboolean success = FALSE;
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
@@ -229,7 +229,7 @@ gboolean bd_utils_exec_and_report_status_error (gchar **argv, BDExtraArg **extra
  *
  * Returns: whether the @argv was successfully executed capturing the output or not
  */
-gboolean bd_utils_exec_and_capture_output (gchar **argv, BDExtraArg **extra, gchar **output, GError **error) {
+gboolean bd_utils_exec_and_capture_output (const gchar **argv, BDExtraArg **extra, gchar **output, GError **error) {
     gchar *stdout_data = NULL;
     gchar *stderr_data = NULL;
     gint status = 0;
@@ -326,7 +326,7 @@ gboolean bd_utils_init_logging (BDUtilsLogFunc new_log_func, GError **error __at
  * **ONLY SUPPORTS VERSION STRINGS OF FORMAT X[.Y[.Z[.Z2[.Z3...[-R]]]]] where all components
  *   are natural numbers!**
  */
-gint bd_utils_version_cmp (gchar *ver_string1, gchar *ver_string2, GError **error) {
+gint bd_utils_version_cmp (const gchar *ver_string1, gchar *ver_string2, GError **error) {
     gchar **v1_fields = NULL;
     gchar **v2_fields = NULL;
     guint v1_fields_len = 0;
@@ -401,7 +401,7 @@ gint bd_utils_version_cmp (gchar *ver_string1, gchar *ver_string2, GError **erro
  * Returns: whether the @util is available in a version >= @version or not
  *          (@error is set in such case).
  */
-gboolean bd_utils_check_util_version (gchar *util, gchar *version, gchar *version_arg, gchar *version_regexp, GError **error) {
+gboolean bd_utils_check_util_version (const gchar *util, gchar *version, gchar *version_arg, gchar *version_regexp, GError **error) {
     gchar *util_path = NULL;
     gchar *argv[] = {util, version_arg ? version_arg : "--version", NULL};
     gchar *output = NULL;

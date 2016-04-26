@@ -150,7 +150,7 @@ gboolean check() {
  * Returns: (transfer full): GHashTable containing the key-value pairs parsed
  * from the @str.
  */
-static GHashTable* parse_mdadm_vars (gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
+static GHashTable* parse_mdadm_vars (const gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
     GHashTable *table = NULL;
     gchar **items = NULL;
     gchar **item_p = NULL;
@@ -375,7 +375,7 @@ guint64 bd_md_get_superblock_size (guint64 member_size, gchar *version, GError *
  *
  * Returns: whether the new MD RAID device @device_name was successfully created or not
  */
-gboolean bd_md_create (gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, BDExtraArg **extra, GError **error) {
+gboolean bd_md_create (const gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, BDExtraArg **extra, GError **error) {
     gchar **argv = NULL;
     /* ["mdadm", "create", device, "--run", "level", "raid-devices",...] */
     guint argv_len = 6;
@@ -450,7 +450,7 @@ gboolean bd_md_create (gchar *device_name, gchar *level, gchar **disks, guint64 
  *
  * Returns: whether the new MD RAID device @device_name was successfully created or not
  */
-gboolean bd_md_create_with_chunk_size (gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, guint64 chunk_size, BDExtraArg **extra, GError **error) {
+gboolean bd_md_create_with_chunk_size (const gchar *device_name, gchar *level, gchar **disks, guint64 spares, gchar *version, gboolean bitmap, guint64 chunk_size, BDExtraArg **extra, GError **error) {
     gchar **argv = NULL;
     /* {"mdadm", "create", device, "--run", "level", "raid-devices",...} */
     guint argv_len = 6;
@@ -526,7 +526,7 @@ gboolean bd_md_create_with_chunk_size (gchar *device_name, gchar *level, gchar *
  *
  * Returns: whether the MD RAID metadata was successfully destroyed on @device or not
  */
-gboolean bd_md_destroy (gchar *device, GError **error) {
+gboolean bd_md_destroy (const gchar *device, GError **error) {
     gchar *argv[] = {"mdadm", "--zero-superblock", device, NULL};
 
     return bd_utils_exec_and_report_error (argv, NULL, error);
@@ -539,7 +539,7 @@ gboolean bd_md_destroy (gchar *device, GError **error) {
  *
  * Returns: whether the RAID device @device_name was successfully deactivated or not
  */
-gboolean bd_md_deactivate (gchar *device_name, GError **error) {
+gboolean bd_md_deactivate (const gchar *device_name, GError **error) {
     gchar *argv[] = {"mdadm", "--stop", device_name, NULL};
     gchar *dev_md_path = NULL;
     gboolean ret = FALSE;
@@ -569,7 +569,7 @@ gboolean bd_md_deactivate (gchar *device_name, GError **error) {
  *
  * Note: either @members or @uuid (or both) have to be specified.
  */
-gboolean bd_md_activate (gchar *device_name, gchar **members, gchar *uuid, BDExtraArg **extra, GError **error) {
+gboolean bd_md_activate (const gchar *device_name, gchar **members, gchar *uuid, BDExtraArg **extra, GError **error) {
     guint64 num_members = members ? g_strv_length (members) : 0;
     gchar **argv = NULL;
     gchar *uuid_str = NULL;
@@ -610,7 +610,7 @@ gboolean bd_md_activate (gchar *device_name, gchar **members, gchar *uuid, BDExt
  *
  * Returns: whether the @raid_name was successfully started or not
  */
-gboolean bd_md_run (gchar *raid_name, GError **error) {
+gboolean bd_md_run (const gchar *raid_name, GError **error) {
     gchar *argv[] = {"mdadm", "--run", NULL, NULL};
     gchar *raid_name_str = NULL;
     gboolean ret = FALSE;
@@ -636,7 +636,7 @@ gboolean bd_md_run (gchar *raid_name, GError **error) {
  *
  * Note: may start the MD RAID if it becomes ready by adding @device.
  */
-gboolean bd_md_nominate (gchar *device, GError **error) {
+gboolean bd_md_nominate (const gchar *device, GError **error) {
     gchar *argv[] = {"mdadm", "--incremental", "--quiet", "--run", device, NULL};
 
     return bd_utils_exec_and_report_error (argv, NULL, error);
@@ -652,7 +652,7 @@ gboolean bd_md_nominate (gchar *device, GError **error) {
  *
  * Note: may start the MD RAID if it becomes ready by adding @device.
  */
-gboolean bd_md_denominate (gchar *device, GError **error) {
+gboolean bd_md_denominate (const gchar *device, GError **error) {
     gchar *argv[] = {"mdadm", "--incremental", "--fail", device, NULL};
 
     /* XXX: stupid mdadm! --incremental --fail requires "sda1" instead of "/dev/sda1" */
@@ -682,7 +682,7 @@ gboolean bd_md_denominate (gchar *device, GError **error) {
  * Whether the new device will be added as a spare or an active member is
  * decided by mdadm.
  */
-gboolean bd_md_add (gchar *raid_name, gchar *device, guint64 raid_devs, BDExtraArg **extra, GError **error) {
+gboolean bd_md_add (const gchar *raid_name, gchar *device, guint64 raid_devs, BDExtraArg **extra, GError **error) {
     gchar *argv[7] = {"mdadm", NULL, NULL, NULL, NULL, NULL, NULL};
     guint argv_top = 1;
     gchar *raid_name_str = NULL;
@@ -723,7 +723,7 @@ gboolean bd_md_add (gchar *raid_name, gchar *device, guint64 raid_devs, BDExtraA
  * Returns: whether the @device was successfully removed from the @raid_name
  * RAID or not.
  */
-gboolean bd_md_remove (gchar *raid_name, gchar *device, gboolean fail, BDExtraArg **extra, GError **error) {
+gboolean bd_md_remove (const gchar *raid_name, gchar *device, gboolean fail, BDExtraArg **extra, GError **error) {
     gchar *argv[] = {"mdadm", raid_name, NULL, NULL, NULL, NULL};
     guint argv_top = 2;
     gchar *raid_name_str = NULL;
@@ -756,7 +756,7 @@ gboolean bd_md_remove (gchar *raid_name, gchar *device, gboolean fail, BDExtraAr
  *
  * Returns: information about the MD RAID extracted from the @device
  */
-BDMDExamineData* bd_md_examine (gchar *device, GError **error) {
+BDMDExamineData* bd_md_examine (const gchar *device, GError **error) {
     gchar *argv[] = {"mdadm", "--examine", "-E", device, NULL};
     gchar *output = NULL;
     gboolean success = FALSE;
@@ -848,7 +848,7 @@ BDMDExamineData* bd_md_examine (gchar *device, GError **error) {
  *
  * Returns: information about the MD RAID @raid_name
  */
-BDMDDetailData* bd_md_detail (gchar *raid_name, GError **error) {
+BDMDDetailData* bd_md_detail (const gchar *raid_name, GError **error) {
     gchar *argv[] = {"mdadm", "--detail", raid_name, NULL};
     gchar *output = NULL;
     gboolean success = FALSE;
@@ -910,7 +910,7 @@ BDMDDetailData* bd_md_detail (gchar *raid_name, GError **error) {
  * This function expects a UUID in the form that mdadm returns. The change is as
  * follows: 3386ff85:f5012621:4a435f06:1eb47236 -> 3386ff85-f501-2621-4a43-5f061eb47236
  */
-gchar* bd_md_canonicalize_uuid (gchar *uuid, GError **error) {
+gchar* bd_md_canonicalize_uuid (const gchar *uuid, GError **error) {
     gchar *next_set = uuid;
     gchar *ret = g_new0 (gchar, 37);
     gchar *dest = ret;
@@ -980,7 +980,7 @@ gchar* bd_md_canonicalize_uuid (gchar *uuid, GError **error) {
  * bd_md_canonicalize_uuid(). The change is as follows:
  * 3386ff85-f501-2621-4a43-5f061eb47236 -> 3386ff85:f5012621:4a435f06:1eb47236
  */
-gchar* bd_md_get_md_uuid (gchar *uuid, GError **error) {
+gchar* bd_md_get_md_uuid (const gchar *uuid, GError **error) {
     gchar *next_set = uuid;
     gchar *ret = g_new0 (gchar, 37);
     gchar *dest = ret;
@@ -1043,7 +1043,7 @@ gchar* bd_md_get_md_uuid (gchar *uuid, GError **error) {
  *
  * Returns: path to the @name MD RAID's device node or %NULL in case of error
  */
-gchar* bd_md_node_from_name (gchar *name, GError **error) {
+gchar* bd_md_node_from_name (const gchar *name, GError **error) {
     gchar *symlink = NULL;
     gchar *ret = NULL;
     gchar *md_path = g_strdup_printf ("/dev/md/%s", name);
@@ -1071,7 +1071,7 @@ gchar* bd_md_node_from_name (gchar *name, GError **error) {
  *
  * Returns: @name of the MD RAID the device node belongs to or %NULL in case of error
  */
-gchar* bd_md_name_from_node (gchar *node, GError **error) {
+gchar* bd_md_name_from_node (const gchar *node, GError **error) {
     gchar *node_path = NULL;
     glob_t glob_buf;
     gchar **path_p;

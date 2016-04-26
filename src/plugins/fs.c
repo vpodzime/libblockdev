@@ -130,7 +130,7 @@ static gint synced_close (gint fd) {
  *
  * Returns: whether signagures were successfully wiped on @device or not
  */
-gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
+gboolean bd_fs_wipe (const gchar *device, gboolean all, GError **error) {
     blkid_probe probe = NULL;
     gint fd = 0;
     gint status = 0;
@@ -198,7 +198,7 @@ gboolean bd_fs_wipe (gchar *device, gboolean all, GError **error) {
     return TRUE;
 }
 
-static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
+static gboolean wipe_fs (const gchar *device, gchar *fs_type, GError **error) {
     blkid_probe probe = NULL;
     gint fd = 0;
     gint status = 0;
@@ -303,7 +303,7 @@ static gboolean wipe_fs (gchar *device, gchar *fs_type, GError **error) {
  *
  * Returns: whether a new ext4 fs was successfully created on @device or not
  */
-gboolean bd_fs_ext4_mkfs (gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_ext4_mkfs (const gchar *device, BDExtraArg **extra, GError **error) {
     gchar *args[3] = {"mkfs.ext4", device, NULL};
 
     return bd_utils_exec_and_report_error (args, extra, error);
@@ -317,7 +317,7 @@ gboolean bd_fs_ext4_mkfs (gchar *device, BDExtraArg **extra, GError **error) {
  * Returns: whether an ext4 signature was successfully wiped from the @device or
  *          not
  */
-gboolean bd_fs_ext4_wipe (gchar *device, GError **error) {
+gboolean bd_fs_ext4_wipe (const gchar *device, GError **error) {
     return wipe_fs (device, "ext4", error);
 }
 
@@ -330,7 +330,7 @@ gboolean bd_fs_ext4_wipe (gchar *device, GError **error) {
  *
  * Returns: whether an ext4 file system on the @device is clean or not
  */
-gboolean bd_fs_ext4_check (gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_ext4_check (const gchar *device, BDExtraArg **extra, GError **error) {
     /* Force checking even if the file system seems clean. AND
      * Open the filesystem read-only, and assume an answer of no to all
      * questions. */
@@ -357,7 +357,7 @@ gboolean bd_fs_ext4_check (gchar *device, BDExtraArg **extra, GError **error) {
  * Returns: whether an ext4 file system on the @device was successfully repaired
  *          (if needed) or not (error is set in that case)
  */
-gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_ext4_repair (const gchar *device, gboolean unsafe, BDExtraArg **extra, GError **error) {
     /* Force checking even if the file system seems clean. AND
      *     Automatically repair what can be safely repaired. OR
      *     Assume an answer of `yes' to all questions. */
@@ -375,7 +375,7 @@ gboolean bd_fs_ext4_repair (gchar *device, gboolean unsafe, BDExtraArg **extra, 
  * Returns: whether the label of ext4 file system on the @device was
  *          successfully set or not
  */
-gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error) {
+gboolean bd_fs_ext4_set_label (const gchar *device, gchar *label, GError **error) {
     gchar *args[5] = {"tune2fs", "-L", label, device, NULL};
 
     return bd_utils_exec_and_report_error (args, NULL, error);
@@ -391,7 +391,7 @@ gboolean bd_fs_ext4_set_label (gchar *device, gchar *label, GError **error) {
  * Returns: (transfer full): GHashTable containing the key-value pairs parsed
  * from the @str.
  */
-static GHashTable* parse_output_vars (gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
+static GHashTable* parse_output_vars (const gchar *str, gchar *item_sep, gchar *key_val_sep, guint *num_items) {
     GHashTable *table = NULL;
     gchar **items = NULL;
     gchar **item_p = NULL;
@@ -456,7 +456,7 @@ static BDFSExt4Info* get_ext4_info_from_table (GHashTable *table, gboolean free_
  * Returns: (transfer full): information about the file system on @device or
  *                           %NULL in case of error
  */
-BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error) {
+BDFSExt4Info* bd_fs_ext4_get_info (const gchar *device, GError **error) {
     gchar *args[4] = {"dumpe2fs", "-h", device, NULL};
     gboolean success = FALSE;
     gchar *output = NULL;
@@ -500,7 +500,7 @@ BDFSExt4Info* bd_fs_ext4_get_info (gchar *device, GError **error) {
  *
  * Returns: whether the file system on @device was successfully resized or not
  */
-gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_ext4_resize (const gchar *device, guint64 new_size, BDExtraArg **extra, GError **error) {
     gchar *args[4] = {"resize2fs", device, NULL, NULL};
     gboolean ret = FALSE;
 
@@ -522,7 +522,7 @@ gboolean bd_fs_ext4_resize (gchar *device, guint64 new_size, BDExtraArg **extra,
  *
  * Returns: whether a new xfs fs was successfully created on @device or not
  */
-gboolean bd_fs_xfs_mkfs (gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_xfs_mkfs (const gchar *device, BDExtraArg **extra, GError **error) {
     gchar *args[3] = {"mkfs.xfs", device, NULL};
 
     return bd_utils_exec_and_report_error (args, extra, error);
@@ -536,7 +536,7 @@ gboolean bd_fs_xfs_mkfs (gchar *device, BDExtraArg **extra, GError **error) {
  * Returns: whether an xfs signature was successfully wiped from the @device or
  *          not
  */
-gboolean bd_fs_xfs_wipe (gchar *device, GError **error) {
+gboolean bd_fs_xfs_wipe (const gchar *device, GError **error) {
     return wipe_fs (device, "xfs", error);
 }
 
@@ -550,7 +550,7 @@ gboolean bd_fs_xfs_wipe (gchar *device, GError **error) {
  * Note: if the file system is mounted it may be reported as unclean even if
  *       everything is okay and there are just some pending/in-progress writes
  */
-gboolean bd_fs_xfs_check (gchar *device, GError **error) {
+gboolean bd_fs_xfs_check (const gchar *device, GError **error) {
     gchar *args[6] = {"xfs_db", "-r", "-c", "check", device, NULL};
     gboolean ret = FALSE;
 
@@ -572,7 +572,7 @@ gboolean bd_fs_xfs_check (gchar *device, GError **error) {
  * Returns: whether an xfs file system on the @device was successfully repaired
  *          (if needed) or not (error is set in that case)
  */
-gboolean bd_fs_xfs_repair (gchar *device, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_xfs_repair (const gchar *device, BDExtraArg **extra, GError **error) {
     gchar *args[3] = {"xfs_repair", device, NULL};
 
     return bd_utils_exec_and_report_error (args, extra, error);
@@ -587,7 +587,7 @@ gboolean bd_fs_xfs_repair (gchar *device, BDExtraArg **extra, GError **error) {
  * Returns: whether the label of xfs file system on the @device was
  *          successfully set or not
  */
-gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error) {
+gboolean bd_fs_xfs_set_label (const gchar *device, gchar *label, GError **error) {
     gchar *args[5] = {"xfs_admin", "-L", label, device, NULL};
     if (!label || (strncmp (label, "", 1) == 0))
         args[2] = "--";
@@ -603,7 +603,7 @@ gboolean bd_fs_xfs_set_label (gchar *device, gchar *label, GError **error) {
  * Returns: (transfer full): information about the file system on @device or
  *                           %NULL in case of error
  */
-BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error) {
+BDFSXfsInfo* bd_fs_xfs_get_info (const gchar *device, GError **error) {
     gchar *args[4] = {"xfs_admin", "-lu", device, NULL};
     gboolean success = FALSE;
     gchar *output = NULL;
@@ -711,7 +711,7 @@ BDFSXfsInfo* bd_fs_xfs_get_info (gchar *device, GError **error) {
  *
  * Returns: whether the file system mounted on @mpoint was successfully resized or not
  */
-gboolean bd_fs_xfs_resize (gchar *mpoint, guint64 new_size, BDExtraArg **extra, GError **error) {
+gboolean bd_fs_xfs_resize (const gchar *mpoint, guint64 new_size, BDExtraArg **extra, GError **error) {
     gchar *args[5] = {"xfs_growfs", NULL, NULL, NULL, NULL};
     gchar *size_str = NULL;
     gboolean ret = FALSE;

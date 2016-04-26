@@ -130,7 +130,7 @@ gboolean bd_s390_dasd_needs_format (const gchar *dasd, GError **error) {
  *
  * Returns: whether a dasd was successfully switched online
  */
-gboolean bd_s390_dasd_online (gchar *dasd, GError **error) {
+gboolean bd_s390_dasd_online (const gchar *dasd, GError **error) {
     gboolean rc = FALSE;
     gint wrc = 0;
     gint online = 0;

@@ -552,7 +552,7 @@ gboolean bd_crypto_luks_change_key (const gchar *device, const gchar *pass, cons
     }
 
     vk_size = crypt_get_volume_key_size(cd);
-    volume_key = (gchar *) g_malloc (vk_size);
+    volume_key = (const gchar *) g_malloc (vk_size);
 
     ret = crypt_volume_key_get (cd, CRYPT_ANY_SLOT, volume_key, &vk_size, pass, strlen(pass));
     if (ret < 0) {
@@ -634,7 +634,7 @@ static void free_passphrase_cb (gpointer data) {
  *
  * Replaces all appereances of @orig in @str with @new (in place).
  */
-static gchar *replace_char (gchar *str, gchar orig, gchar new) {
+static gchar *replace_char (const gchar *str, gchar orig, gchar new) {
     gchar *pos = str;
     if (!str)
         return str;
@@ -683,7 +683,7 @@ static gboolean write_escrow_data_file (struct libvk_volume *volume, struct libv
         return FALSE;
     }
 
-    status = g_io_channel_write_chars (out_file, (gchar *) packet_data, (gssize) packet_data_size,
+    status = g_io_channel_write_chars (out_file, (const gchar *) packet_data, (gssize) packet_data_size,
                                        &bytes_written, error);
     g_free (packet_data);
     if (status != G_IO_STATUS_NORMAL) {
