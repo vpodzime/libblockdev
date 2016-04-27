@@ -281,11 +281,11 @@ gboolean init() {
     return TRUE;
 }
 
-static gchar** get_existing_objects (const gchar *obj_prefix, GError **error) {
+static const gchar** get_existing_objects (const gchar *obj_prefix, GError **error) {
     GVariant *intro_v = NULL;
     gchar *intro_data = NULL;
     GDBusNodeInfo *info = NULL;
-    gchar **ret = NULL;
+    const gchar **ret = NULL;
     GDBusNodeInfo **nodes;
     guint64 n_nodes = 0;
     guint64 i = 0;
@@ -304,7 +304,7 @@ static gchar** get_existing_objects (const gchar *obj_prefix, GError **error) {
     for (nodes = info->nodes; (*nodes); nodes++)
         n_nodes++;
 
-    ret = g_new0 (gchar*, n_nodes + 1);
+    ret = g_new0 (const gchar*, n_nodes + 1);
     for (nodes = info->nodes, i=0; (*nodes); nodes++, i++) {
         ret[i] = g_strdup_printf ("%s/%s", obj_prefix, ((*nodes)->path));
     }
@@ -392,7 +392,7 @@ static GVariant* call_lvm_method (const gchar *obj, const gchar *intf, const gch
     GVariant *ret = NULL;
     gchar *params_str = NULL;
     gchar *log_msg = NULL;
-    BDExtraArg **extra_p = NULL;
+    const BDExtraArg **extra_p = NULL;
 
     /* don't allow global config string changes during the run */
     g_mutex_lock (&global_config_lock);
@@ -1226,7 +1226,7 @@ BDLVMPVdata* bd_lvm_pvinfo (const gchar *device, GError **error) {
  * Returns: (array zero-terminated=1): information about PVs found in the system
  */
 BDLVMPVdata** bd_lvm_pvs (GError **error) {
-    gchar **objects = NULL;
+    const gchar **objects = NULL;
     guint64 n_pvs = 0;
     GVariant *props = NULL;
     BDLVMPVdata **ret = NULL;
@@ -1244,27 +1244,27 @@ BDLVMPVdata** bd_lvm_pvs (GError **error) {
             return NULL;
     }
 
-    n_pvs = g_strv_length (objects);
+    n_pvs = g_strv_length ((gchar **) objects);
 
     /* now create the return value -- NULL-terminated array of BDLVMPVdata */
     ret = g_new0 (BDLVMPVdata*, n_pvs + 1);
     for (i=0; i < n_pvs; i++) {
         props = get_object_properties (objects[i], PV_INTF, error);
         if (!props) {
-            g_strfreev (objects);
+            g_strfreev ((gchar **) objects);
             g_free (ret);
             return NULL;
         }
         ret[i] = get_pv_data_from_props (props, error);
         if (!(ret[i])) {
-            g_strfreev (objects);
+            g_strfreev ((gchar **) objects);
             g_free (ret);
             return NULL;
         }
     }
     ret[i] = NULL;
 
-    g_strfreev (objects);
+    g_strfreev ((gchar **) objects);
     return ret;
 }
 
@@ -1282,14 +1282,14 @@ BDLVMPVdata** bd_lvm_pvs (GError **error) {
 gboolean bd_lvm_vgcreate (const gchar *name, const gchar **pv_list, guint64 pe_size, const BDExtraArg **extra, GError **error) {
     GVariantBuilder builder;
     gchar *path = NULL;
-    gchar **pv = NULL;
+    const gchar **pv = NULL;
     GVariant *pvs = NULL;
     GVariant *params = NULL;
     GVariant *extra_params = NULL;
 
     /* build the array of PVs (object paths) */
     g_variant_builder_init (&builder, G_VARIANT_TYPE_OBJECT_PATH_ARRAY);
-    for (pv = pv_list; *pv; pv++) {
+    for (pv=pv_list; *pv; pv++) {
         path = get_object_path (*pv, error);
         if (!path) {
             g_variant_builder_clear (&builder);
@@ -1492,7 +1492,7 @@ BDLVMVGdata* bd_lvm_vginfo (const gchar *vg_name, GError **error) {
  * Returns: (array zero-terminated=1): information about VGs found in the system
  */
 BDLVMVGdata** bd_lvm_vgs (GError **error) {
-    gchar **objects = NULL;
+    const gchar **objects = NULL;
     guint64 n_vgs = 0;
     GVariant *props = NULL;
     BDLVMVGdata **ret = NULL;
@@ -1510,27 +1510,27 @@ BDLVMVGdata** bd_lvm_vgs (GError **error) {
             return NULL;
     }
 
-    n_vgs = g_strv_length (objects);
+    n_vgs = g_strv_length ((gchar **) objects);
 
     /* now create the return value -- NULL-terminated array of BDLVMVGdata */
     ret = g_new0 (BDLVMVGdata*, n_vgs + 1);
     for (i=0; i < n_vgs; i++) {
         props = get_object_properties (objects[i], VG_INTF, error);
         if (!props) {
-            g_strfreev (objects);
+            g_strfreev ((gchar **) objects);
             g_free (ret);
             return NULL;
         }
         ret[i] = get_vg_data_from_props (props, error);
         if (!(ret[i])) {
-            g_strfreev (objects);
+            g_strfreev ((gchar **) objects);
             g_free (ret);
             return NULL;
         }
     }
     ret[i] = NULL;
 
-    g_strfreev (objects);
+    g_strfreev ((gchar **) objects);
     return ret;
 }
 
@@ -1588,7 +1588,7 @@ gchar* bd_lvm_lvorigin (const gchar *vg_name, const gchar *lv_name, GError **err
 gboolean bd_lvm_lvcreate (const gchar *vg_name, const gchar *lv_name, guint64 size, const gchar *type, const gchar **pv_list, const BDExtraArg **extra, GError **error) {
     GVariantBuilder builder;
     gchar *path = NULL;
-    gchar **pv = NULL;
+    const gchar **pv = NULL;
     GVariant *pvs = NULL;
     GVariantType *var_type = NULL;
     GVariant *params = NULL;
@@ -1597,7 +1597,7 @@ gboolean bd_lvm_lvcreate (const gchar *vg_name, const gchar *lv_name, guint64 si
     /* build the array of PVs (object paths) */
     if (pv_list) {
         g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
-        for (pv = pv_list; *pv; pv++) {
+        for (pv=pv_list; *pv; pv++) {
             path = get_object_path (*pv, error);
             if (!path) {
                 g_variant_builder_clear (&builder);
@@ -1625,7 +1625,7 @@ gboolean bd_lvm_lvcreate (const gchar *vg_name, const gchar *lv_name, guint64 si
         /* and now the extra_params params */
         g_variant_builder_init (&builder, G_VARIANT_TYPE_DICTIONARY);
         if (pv_list && g_strcmp0 (type, "striped") == 0)
-            g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "stripes", g_variant_new ("i", g_strv_length (pv_list))));
+            g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "stripes", g_variant_new ("i", g_strv_length ((gchar **) pv_list))));
         else
             g_variant_builder_add_value (&builder, g_variant_new ("{sv}", "type", g_variant_new ("s", type)));
         extra_params = g_variant_builder_end (&builder);
@@ -1852,7 +1852,7 @@ static gchar* get_lv_vg_name (const gchar *lv_obj_path, GError **error) {
  * Filter LVs by VG name and prepend the matching ones to the @out list.
  */
 static gboolean filter_lvs_by_vg (const gchar **lvs, const gchar *vg_name, GSList **out, guint64 *n_lvs, GError **error) {
-    gchar **lv_p = NULL;
+    const gchar **lv_p = NULL;
     gchar *lv_vg_name = NULL;
     gboolean success = TRUE;
 
@@ -1864,15 +1864,15 @@ static gboolean filter_lvs_by_vg (const gchar **lvs, const gchar *vg_name, GSLis
         if (vg_name) {
             lv_vg_name = get_lv_vg_name (*lv_p, error);
             if (!lv_vg_name) {
-                g_free (*lv_p);
+                g_free ((gchar *) *lv_p);
                 success = FALSE;
             }
         }
         if (!vg_name || g_strcmp0 (lv_vg_name, vg_name) == 0) {
-            *out = g_slist_prepend (*out, *lv_p);
+            *out = g_slist_prepend (*out, (gchar *) *lv_p);
             (*n_lvs)++;
         } else {
-            g_free (*lv_p);
+            g_free ((gchar *) *lv_p);
             *lv_p = NULL;
         }
         g_free (lv_vg_name);
@@ -1889,7 +1889,7 @@ static gboolean filter_lvs_by_vg (const gchar **lvs, const gchar *vg_name, GSLis
  * @vg_name VG or in system if @vg_name is %NULL
  */
 BDLVMLVdata** bd_lvm_lvs (const gchar *vg_name, GError **error) {
-    gchar **lvs = NULL;
+    const gchar **lvs = NULL;
     guint64 n_lvs = 0;
     GVariant *props = NULL;
     BDLVMLVdata **ret = NULL;
@@ -2426,7 +2426,7 @@ gboolean bd_lvm_cache_detach (const gchar *vg_name, const gchar *cached_lv, gboo
  * Returns: whether the cached LV @lv_name was successfully created or not
  */
 gboolean bd_lvm_cache_create_cached_lv (const gchar *vg_name, const gchar *lv_name, guint64 data_size, guint64 cache_size, guint64 md_size, BDLVMCacheMode mode, BDLVMCachePoolFlags flags,
-                                        gchar **slow_pvs, const gchar **fast_pvs, GError **error) {
+                                        const gchar **slow_pvs, const gchar **fast_pvs, GError **error) {
     gboolean success = FALSE;
     gchar *name = NULL;
 
