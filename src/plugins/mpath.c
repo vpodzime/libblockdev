@@ -75,7 +75,7 @@ gboolean check() {
  * Flushes all unused multipath device maps.
  */
 gboolean bd_mpath_flush_mpaths (GError **error) {
-    gchar *argv[3] = {"multipath", "-F", NULL};
+    const gchar *argv[3] = {"multipath", "-F", NULL};
     gboolean success = FALSE;
     gchar *output = NULL;
 
@@ -349,7 +349,7 @@ gboolean bd_mpath_is_mpath_member (const gchar *device, GError **error) {
  * Returns: if successfully set or not
  */
 gboolean bd_mpath_set_friendly_names (gboolean enabled, GError **error) {
-    gchar *argv[8] = {"mpathconf", "--find_multipaths", "y", "--user_friendly_names", NULL, "--with_multipathd", "y", NULL};
+    const gchar *argv[8] = {"mpathconf", "--find_multipaths", "y", "--user_friendly_names", NULL, "--with_multipathd", "y", NULL};
     argv[4] = enabled ? "y" : "n";
 
     return bd_utils_exec_and_report_error (argv, NULL, error);
