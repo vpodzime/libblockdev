@@ -206,7 +206,7 @@ BDPartSpec* bd_part_get_part_spec (const gchar *disk, const gchar *part, GError 
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
-    gchar *part_num_str = NULL;
+    const gchar *part_num_str = NULL;
     gint part_num = 0;
     BDPartSpec *ret = NULL;
 
@@ -477,7 +477,7 @@ gboolean bd_part_delete_part (const gchar *disk, const gchar *part, GError **err
     PedDevice *dev = NULL;
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
-    gchar *part_num_str = NULL;
+    const gchar *part_num_str = NULL;
     gint part_num = 0;
     gint status = 0;
     gboolean ret = FALSE;
@@ -561,7 +561,7 @@ gboolean bd_part_set_part_flag (const gchar *disk, const gchar *part, BDPartFlag
     PedDisk *ped_disk = NULL;
     PedPartition *ped_part = NULL;
     PedPartitionFlag ped_flag = PED_PARTITION_FIRST_FLAG;
-    gchar *part_num_str = NULL;
+    const gchar *part_num_str = NULL;
     gint part_num = 0;
     gint status = 0;
     gboolean ret = FALSE;
