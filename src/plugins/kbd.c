@@ -546,7 +546,7 @@ BDKBDZramStats* bd_kbd_zram_get_stats (const gchar *device, GError **error) {
  * Returns: whether the bcache device was successfully created or not
  */
 gboolean bd_kbd_bcache_create (const gchar *backing_device, const gchar *cache_device, const BDExtraArg **extra, const gchar **bcache_device, GError **error) {
-    gchar *argv[6] = {"make-bcache", "-B", backing_device, "-C", cache_device, NULL};
+    const gchar *argv[6] = {"make-bcache", "-B", backing_device, "-C", cache_device, NULL};
     gboolean success = FALSE;
     gchar *output = NULL;
     gchar **lines = NULL;
@@ -689,7 +689,7 @@ gboolean bd_kbd_bcache_attach (const gchar *c_set_uuid, const gchar *bcache_devi
  *
  * Note: Flushes the cache first.
  */
-gboolean bd_kbd_bcache_detach (const gchar *bcache_device, const gchar **c_set_uuid, GError **error) {
+gboolean bd_kbd_bcache_detach (const gchar *bcache_device, gchar **c_set_uuid, GError **error) {
     gchar *path = NULL;
     gchar *link = NULL;
     gchar *uuid = NULL;

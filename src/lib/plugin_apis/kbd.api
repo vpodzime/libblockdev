@@ -214,7 +214,7 @@ gboolean bd_kbd_bcache_attach (const gchar *c_set_uuid, const gchar *bcache_devi
  *
  * Note: Flushes the cache first.
  */
-gboolean bd_kbd_bcache_detach (const gchar *bcache_device, const gchar **c_set_uuid, GError **error);
+gboolean bd_kbd_bcache_detach (const gchar *bcache_device, gchar **c_set_uuid, GError **error);
 
 /**
  * bd_kbd_bcache_destroy:
