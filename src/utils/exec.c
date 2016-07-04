@@ -29,6 +29,10 @@ static GMutex id_counter_lock;
 static guint64 id_counter = 0;
 static BDUtilsLogFunc log_func = NULL;
 
+static GMutex task_id_counter_lock;
+static guint64 task_id_counter = 0;
+static BDUtilsProgFunc prog_func = NULL;
+
 /**
  * bd_utils_exec_error_quark: (skip)
  */
@@ -480,4 +484,61 @@ gboolean bd_utils_check_util_version (const gchar *util, const gchar *version, c
 
     g_free (version_str);
     return TRUE;
+}
+
+/**
+ * bd_utils_init_prog_reporting:
+ * @new_prog_func: (allow-none) (scope notified): progress reporting function to
+ *                                                use or %NULL to reset to default
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether progress reporting was successfully initialized or not
+ */
+gboolean bd_utils_init_prog_reporting (BDUtilsProgFunc new_prog_func, GError **error __attribute__((unused))) {
+    /* XXX: the error attribute will likely be used in the future when this
+       function gets more complicated */
+
+    prog_func = new_prog_func;
+
+    return TRUE;
+}
+
+/**
+ * bd_utils_report_started:
+ * @msg: message describing the started task/action
+ *
+ * Returns: ID of the started task/action
+ */
+guint64 bd_utils_report_started (gchar *msg) {
+    guint64 task_id = 0;
+
+    g_mutex_lock (&task_id_counter_lock);
+    task_id_counter++;
+    task_id = task_id_counter;
+    g_mutex_unlock (&task_id_counter_lock);
+
+    if (prog_func)
+        prog_func (task_id, BD_UTILS_PROG_STARTED, 0, msg);
+    return task_id;
+}
+
+/**
+ * bd_utils_report_progress:
+ * @task_id: ID of the task/action
+ * @completion: percentage of completion
+ * @msg: message describing the status of the task/action
+ */
+void bd_utils_report_progress (guint64 task_id, guint64 completion, gchar *msg) {
+    if (prog_func)
+        prog_func (task_id, BD_UTILS_PROG_PROGRESS, completion, msg);
+}
+
+/**
+ * bd_utils_report_finished:
+ * @task_id: ID of the task/action
+ * @msg: message describing the status of the task/action
+ */
+void bd_utils_report_finished (guint64 task_id, gchar *msg) {
+    if (prog_func)
+        prog_func (task_id, BD_UTILS_PROG_FINISHED, 100, msg);
 }

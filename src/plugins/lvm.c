@@ -20,6 +20,9 @@
 #include <glib.h>
 #include <math.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <libdevmapper.h>
 #include <unistd.h>
 #include <utils.h>
@@ -646,12 +649,82 @@ gboolean bd_lvm_pvremove (const gchar *device, const BDExtraArg **extra, GError 
  * If @dest is %NULL, VG allocation rules are used for the extents from the @src
  * PV (see pvmove(8)).
  */
-gboolean bd_lvm_pvmove (const gchar *src, const gchar *dest, const BDExtraArg **extra, GError **error) {
-    const gchar *args[4] = {"pvmove", src, NULL, NULL};
-    if (dest)
-        args[2] = dest;
+gboolean bd_lvm_pvmove (const gchar *src, const gchar *dest, const BDExtraArg **extra __attribute__((unused)), GError **error) {
+    gboolean ret = FALSE;
+    GPid pid = 0;
+    gint out_fd = 0;
+    GIOChannel *out_pipe = NULL;
+    gchar *line = NULL;
+    GIOStatus io_status = G_IO_STATUS_NORMAL;
+    gint child_ret = -1;
+    gint status = 0;
+    guint64 task_id = 0;
+    gchar *msg = NULL;
+    gchar *num_start = NULL;
+    guint8 completion = 0;
+    gint n_scanned = 0;
 
-    return call_lvm_and_report_error (args, extra, error);
+    const gchar *args[6] = {"pvmove", "-i", "1", src, NULL, NULL};
+    if (dest)
+        args[4] = dest;
+
+    ret = g_spawn_async_with_pipes (NULL, (gchar**) args, NULL,
+                                    G_SPAWN_DEFAULT|G_SPAWN_SEARCH_PATH|G_SPAWN_DO_NOT_REAP_CHILD,
+                                    NULL, NULL, &pid, NULL, &out_fd, NULL, error);
+    if (!ret)
+        /* error is already populated */
+        return FALSE;
+
+    if (dest)
+        msg = g_strdup_printf ("Started 'pvmove %s %s'", src, dest);
+    else
+        msg = g_strdup_printf ("Started 'pvmove %s'", src);
+    task_id = bd_utils_report_started (msg);
+    g_free (msg);
+
+    out_pipe = g_io_channel_unix_new (out_fd);
+    io_status = g_io_channel_read_line (out_pipe, &line, NULL, NULL, error);
+    while ((io_status == G_IO_STATUS_NORMAL) || (io_status == G_IO_STATUS_AGAIN)) {
+        if (io_status == G_IO_STATUS_NORMAL) {
+            num_start = strrchr (line, ' ');
+            num_start++;
+            n_scanned = sscanf (num_start, "%hhu", &completion);
+            if (n_scanned == 1)
+                bd_utils_report_progress (task_id, completion, NULL);
+        }
+        io_status = g_io_channel_read_line (out_pipe, &line, NULL, NULL, error);
+    }
+    if (io_status != G_IO_STATUS_EOF) {
+        /* error should be set */
+        bd_utils_report_finished (task_id, (*error)->message);
+        return FALSE;
+    }
+
+    child_ret = waitpid (pid, &status, 0);
+    if ((child_ret > 0) && (WEXITSTATUS(status) != 0)) {
+        g_set_error (error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_FAILED,
+                     "Process reported exit code %d", WEXITSTATUS(status));
+        bd_utils_report_finished (task_id, (*error)->message);
+        return FALSE;
+    } else if (child_ret == -1) {
+        if (errno != ECHILD) {
+            g_set_error (error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_FAILED,
+                         "Failed to wait for the process");
+            bd_utils_report_finished (task_id, (*error)->message);
+            errno = 0;
+            return FALSE;
+        }
+        /* no such process (the child exited before we tried to wait for it) */
+        errno = 0;
+    }
+
+    bd_utils_report_finished (task_id, "Completed");
+
+    /* we don't care about the status here */
+    g_io_channel_shutdown (out_pipe, FALSE, error);
+    g_io_channel_unref (out_pipe);
+
+    return TRUE;
 }
 
 /**
