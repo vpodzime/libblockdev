@@ -23,8 +23,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <inttypes.h>
-#include <unistd.h>
-#include <sys/file.h>
 #include <blockdev/utils.h>
 #include <part_err.h>
 
@@ -177,22 +175,11 @@ static const gchar *table_type_str[BD_PART_TABLE_UNDEF] = {"msdos", "gpt"};
 
 static gboolean disk_commit (PedDisk *disk, const gchar *path, GError **error) {
     gint ret = 0;
-    gint dev_fd = 0;
-
-    /* XXX: try to grab an exclusive lock for the device so that udev doesn't
-       trigger events for it in between the two operations we need to perform
-       (see below) */
-    dev_fd = open (disk->dev->path, O_RDONLY|O_CLOEXEC);
-    if (dev_fd >= 0)
-        /* if this fails, we can do no better anyway, so just ignore the return
-           value */
-        flock (dev_fd, LOCK_EX);
 
     ret = ped_disk_commit_to_dev (disk);
     if (ret == 0) {
         set_parted_error (error, BD_PART_ERROR_FAIL);
         g_prefix_error (error, "Failed to commit changes to device '%s'", path);
-        close (dev_fd);
         return FALSE;
     }
 
@@ -200,11 +187,9 @@ static gboolean disk_commit (PedDisk *disk, const gchar *path, GError **error) {
     if (ret == 0) {
         set_parted_error (error, BD_PART_ERROR_FAIL);
         g_prefix_error (error, "Failed to inform OS about changes on the '%s' device", path);
-        close (dev_fd);
         return FALSE;
     }
 
-    close (dev_fd);
     return TRUE;
 }
 
