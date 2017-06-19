@@ -865,6 +865,37 @@ gboolean bd_crypto_luks_resize (const gchar *luks_device, guint64 size, GError *
     return TRUE;
 }
 
+/**
+ * bd_crypto_tc_format:
+ * @device: a device to format as TrueCrypt
+ * @cipher: (allow-none): cipher specification or %NULL to use the default
+ * @hash: (allow-none): hash algorithm to use for the PBKDF2 password derivation or %NULL to use the default
+ * @pass_data: (array length=data_len): a passphrase for the new TrueCrypt device (may contain arbitrary binary data)
+ * @data_len: length of the @pass_data buffer
+ * @extra: (allow-none) (array zero-terminated=1): extra arguments (passed to the 'tcplay' utility)
+ * @error: (out): place to store error (if any)
+ *
+ * Formats the given @device as a TrueCrypt volume according to the other parameters given.
+ *
+ * Returns: whether the given @device was successfully formatted as TrueCrypt or not
+ * (the @error contains the error in such cases)
+ */
+gboolean bd_crypto_tc_format (const gchar *device, const gchar *cipher, const gchar *hash, const guint8 *pass_data, gsize data_len, const BDExtraArg **extra, GError **error) {
+    const gchar *args[9] = {"tcplay", "-c", "-d", device, NULL, NULL, NULL, NULL, NULL};
+    guint8 args_top = 4;
+
+    if (cipher) {
+        args[args_top++] = "-b";
+        args[args_top++] = cipher;
+    }
+    if (hash) {
+        args[args_top++] = "-a";
+        args[args_top++] = hash;
+    }
+
+    return bd_utils_exec_and_report_error_input (args, extra, pass_data, data_len, error);
+}
+
 static gchar *always_fail_cb (gpointer data __attribute__((unused)), const gchar *prompt __attribute__((unused)), int echo __attribute__((unused))) {
     return NULL;
 }
