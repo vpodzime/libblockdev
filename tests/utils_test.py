@@ -242,3 +242,20 @@ class UtilsDevUtilsSymlinksTestCase(unittest.TestCase):
         symlinks = BlockDev.utils_get_device_symlinks("utilsTestVG/utilsTestLV")
         # there should be at least 4 symlinks for an LV
         self.assertGreaterEqual(len(symlinks), 4)
+
+class UtilsExecTestCase(unittest.TestCase):
+    def test_exec_and_report_error_input(self):
+        # check that the input is exactly what we want it to be
+        self.assertTrue(BlockDev.utils_exec_and_report_error_input(["grep", "^hello$"], None, [ord(c) for c in "hello"]))
+
+        # newline is okay for grep too
+        self.assertTrue(BlockDev.utils_exec_and_report_error_input(["grep", "^hello$"], None, [ord(c) for c in "hello\n"]))
+
+        # but extra space isn't
+        with self.assertRaises(GLib.GError):
+            self.assertTrue(BlockDev.utils_exec_and_report_error_input(["grep", "^hello$"], None, [ord(c) for c in "hello "]))
+        with self.assertRaises(GLib.GError):
+            self.assertTrue(BlockDev.utils_exec_and_report_error_input(["grep", "^hello$"], None, [ord(c) for c in " hello"]))
+
+        # should also get the second line and thus have a match
+        self.assertTrue(BlockDev.utils_exec_and_report_error_input(["grep", "^hi$"], None, [ord(c) for c in "hello\nhi"]))

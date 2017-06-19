@@ -25,6 +25,10 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <signal.h>
+#include <unistd.h>
+
+#include <string.h>
 
 extern char **environ;
 
@@ -323,17 +327,7 @@ gboolean bd_utils_exec_and_capture_output (const gchar **argv, const BDExtraArg 
     }
 }
 
-/**
- * bd_utils_exec_and_report_progress:
- * @argv: (array zero-terminated=1): the argv array for the call
- * @extra: (allow-none) (array zero-terminated=1): extra arguments
- * @prog_extract: (scope notified): function for extracting progress information
- * @proc_status: (out): place to store the process exit status
- * @error: (out): place to store error (if any)
- *
- * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
- */
-gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg **extra, BDUtilsProgExtract prog_extract, gint *proc_status, GError **error) {
+static gboolean exec_and_report_progress_input (const gchar **argv, const BDExtraArg **extra, BDUtilsProgExtract prog_extract, const guint8 *input_data, gsize data_len, gint *proc_status, GError **error) {
     const gchar **args = NULL;
     guint args_len = 0;
     const gchar **arg_p = NULL;
@@ -347,6 +341,9 @@ gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg
     GIOChannel *out_pipe = NULL;
     gint err_fd = 0;
     GIOChannel *err_pipe = NULL;
+    gint in_fd = 0;
+    GIOChannel *in_pipe = NULL;
+    gsize bytes_written = 0;
     gchar *line = NULL;
     gint child_ret = -1;
     gint status = 0;
@@ -389,7 +386,8 @@ gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg
 
     ret = g_spawn_async_with_pipes (NULL, args ? (gchar**) args : (gchar**) argv, NULL,
                                     G_SPAWN_DEFAULT|G_SPAWN_SEARCH_PATH|G_SPAWN_DO_NOT_REAP_CHILD,
-                                    NULL, NULL, &pid, NULL, &out_fd, &err_fd, error);
+                                    NULL, NULL, &pid,
+                                    data_len != 0 ? &in_fd : NULL, &out_fd, &err_fd, error);
 
     if (!ret)
         /* error is already populated */
@@ -400,6 +398,24 @@ gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg
     progress_id = bd_utils_report_started (msg);
     g_free (args_str);
     g_free (msg);
+
+    if (data_len != 0) {
+        in_pipe = g_io_channel_unix_new (in_fd);
+        /* disable encoding checking and buffering/blocking */
+        g_io_channel_set_encoding (in_pipe, NULL, error);
+        g_io_channel_set_flags (in_pipe, G_IO_FLAG_NONBLOCK, NULL);
+
+        io_status = g_io_channel_write_chars (in_pipe, (const gchar *) input_data, data_len, &bytes_written, error);
+        g_io_channel_shutdown (in_pipe, TRUE, error);
+        g_io_channel_unref (in_pipe);
+        if (io_status != G_IO_STATUS_NORMAL || (bytes_written != data_len)) {
+            close (out_fd);
+            close (err_fd);
+            kill (pid, SIGTERM);
+            waitpid (pid, NULL, 0);
+            return FALSE;
+        }
+    }
 
     out_pipe = g_io_channel_unix_new (out_fd);
     err_pipe = g_io_channel_unix_new (err_fd);
@@ -468,7 +484,7 @@ gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg
             else
                 msg = stdout_data->str;
             g_set_error (error, BD_UTILS_EXEC_ERROR, BD_UTILS_EXEC_ERROR_FAILED,
-                         "Process reported exit code %d: %s", *proc_status, stderr_data->str);
+                         "Process reported exit code %d: %s", *proc_status, msg);
             bd_utils_report_finished (progress_id, (*error)->message);
             g_string_free (stdout_data, TRUE);
             g_string_free (stderr_data, TRUE);
@@ -509,6 +525,38 @@ gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg
     g_string_free (stderr_data, TRUE);
 
     return TRUE;
+}
+
+/**
+ * bd_utils_exec_and_report_progress:
+ * @argv: (array zero-terminated=1): the argv array for the call
+ * @extra: (allow-none) (array zero-terminated=1): extra arguments
+ * @prog_extract: (scope notified): function for extracting progress information
+ * @proc_status: (out): place to store the process exit status
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
+ */
+gboolean bd_utils_exec_and_report_progress (const gchar **argv, const BDExtraArg **extra, BDUtilsProgExtract prog_extract, gint *proc_status, GError **error) {
+    /* just call the "stronger" function with no input */
+    return exec_and_report_progress_input (argv, extra, prog_extract, NULL, 0, proc_status, error);
+}
+
+
+/**
+ * bd_utils_exec_and_report_error_input:
+ * @argv: (array zero-terminated=1): the argv array for the call
+ * @input_data: (allow-none) (array length=data_len): input data for the spawned process (may contain arbitrary binary data)
+ * @data_len: length of the @pass_data buffer
+ * @extra: (allow-none) (array zero-terminated=1): extra arguments
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: whether the @argv was successfully executed (no error and exit code 0) or not
+ */
+gboolean bd_utils_exec_and_report_error_input (const gchar **argv, const BDExtraArg **extra, const guint8 *input_data, gsize data_len, GError **error) {
+    gint status;
+    /* just call the "stronger" function with no special progress reporting (start and finish will be reported) */
+    return exec_and_report_progress_input (argv, extra, NULL, input_data, data_len, &status, error);
 }
 
 /**
