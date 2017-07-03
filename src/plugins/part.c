@@ -831,7 +831,7 @@ static PedPartition* add_part_to_disk (PedDevice *dev, PedDisk *disk, BDPartType
     status = ped_disk_add_partition (disk, part, constr);
     if (status == 0) {
         set_parted_error (error, BD_PART_ERROR_FAIL);
-        g_prefix_error (error, "Failed add partition to device '%s'", dev->path);
+        g_prefix_error (error, "Failed to add partition to device '%s'", dev->path);
         ped_geometry_destroy (geom);
         ped_constraint_destroy (constr);
         ped_partition_destroy (part);
