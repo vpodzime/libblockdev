@@ -731,6 +731,7 @@ static gboolean resize_part (PedPartition *part, PedDevice *dev, PedDisk *disk, 
     PedSector end;
     PedSector new_size = 0;
     gint status = 0;
+    const PedSector tolerance = (PedSector) (3 MiB /  dev->sector_size);
 
     constr = prepare_alignment_constraint (dev, disk, align, &orig_flag_state);
     start = part->geom.start;
@@ -763,10 +764,13 @@ static gboolean resize_part (PedPartition *part, PedDevice *dev, PedDisk *disk, 
         return FALSE;
     }
 
-    if (size != 0)
+    if (size != 0) {
         end = ped_alignment_align_up (constr->end_align, constr->end_range, geom->end);
-    else
+        if (end > geom->end && end < geom->end + tolerance)
+            end = geom->end;
+    } else {
         end = geom->end;
+    }
 
     status = ped_disk_set_partition_geom (disk, part, constr, start, end);
 
@@ -777,7 +781,7 @@ static gboolean resize_part (PedPartition *part, PedDevice *dev, PedDisk *disk, 
         ped_constraint_destroy (constr);
         finish_alignment_constraint (disk, orig_flag_state);
         return FALSE;
-    } else if (part->geom.start != start || part->geom.length < new_size) {
+    } else if (part->geom.start != start || part->geom.length < new_size - tolerance) {
         g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL, "Failed to meet correct partition size on device '%s'", dev->path);
         ped_geometry_destroy (geom);
         ped_constraint_destroy (constr);
