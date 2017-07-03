@@ -768,8 +768,6 @@ static gboolean resize_part (PedPartition *part, PedDevice *dev, PedDisk *disk, 
     else
         end = geom->end;
 
-    ped_constraint_destroy (constr);
-    constr = ped_constraint_exact (geom);
     status = ped_disk_set_partition_geom (disk, part, constr, start, end);
 
     if (status == 0) {
@@ -825,8 +823,8 @@ static PedPartition* add_part_to_disk (PedDevice *dev, PedDisk *disk, BDPartType
         return NULL;
     }
 
-    ped_constraint_destroy (constr);
-    constr = ped_constraint_exact (geom);
+    if (!constr)
+        constr = ped_constraint_exact (geom);
 
     status = ped_disk_add_partition (disk, part, constr);
     if (status == 0) {
