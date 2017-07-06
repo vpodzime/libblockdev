@@ -116,6 +116,7 @@ LIBBLOCKDEV_PLUGIN([MPATH], [mpath])
 LIBBLOCKDEV_PLUGIN([SWAP], [swap])
 LIBBLOCKDEV_PLUGIN([KBD], [kbd])
 LIBBLOCKDEV_PLUGIN([PART], [part])
+LIBBLOCKDEV_PLUGIN([PART_FDISK], [part_fdisk])
 LIBBLOCKDEV_PLUGIN([FS], [fs])
 
 AM_CONDITIONAL(WITH_PART_O_WITH_FS, test "x$with_part" != "xno" -o "x$with_fs" != "xno")
@@ -148,6 +149,10 @@ AS_IF([test "x$with_kbd" != "xno"],
 
 AS_IF([test "x$with_part" != "xno" -o "x$with_fs" != "xno"],
       [LIBBLOCKDEV_PKG_CHECK_MODULES([PARTED], [libparted >= 3.1])]
+      [])
+
+AS_IF([test "x$with_part_fdisk" != "xno"],
+      [LIBBLOCKDEV_PKG_CHECK_MODULES([FDISK], [fdisk >= 2.28.0])]
       [])
 
 AS_IF([test "x$with_fs" != "xno"],
