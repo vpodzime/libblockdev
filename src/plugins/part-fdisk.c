@@ -282,3 +282,280 @@ gboolean bd_part_delete_part (const gchar *disk, const gchar *part, GError **err
     bd_utils_report_finished (progress_id, "Completed");
     return TRUE;
 }
+
+/**
+ * bd_part_create_part:
+ * @disk: disk to create partition on
+ * @type: type of the partition to create (if %BD_PART_TYPE_REQ_NEXT, the
+ *        partition type will be determined automatically based on the existing
+ *        partitions)
+ * @start: where the partition should start (i.e. offset from the disk start)
+ * @size: desired size of the partition (if 0, a max-sized partition is created)
+ * @align: alignment to use for the partition
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): specification of the created partition or %NULL in case of error
+ *
+ * NOTE: The resulting partition may start at a different position than given by
+ *       @start and can have different size than @size due to alignment.
+ */
+BDPartSpec* bd_part_create_part (const gchar *disk, BDPartTypeReq type, guint64 start, guint64 size, BDPartAlign align, GError **error) {
+    struct fdisk_context *cxt = NULL;
+    struct fdisk_partition *npa = NULL;
+    gint status = 0;
+    BDPartSpec *ret = NULL;
+    guint64 progress_id = 0;
+    gchar *msg = NULL;
+    guint64 sector_size = 0;
+    guint64 grain_size = 0;
+    struct fdisk_parttype *ptype = NULL;
+    struct fdisk_label *lbl = NULL;
+    struct fdisk_table *table = NULL;
+    struct fdisk_iter *iter = NULL;
+    struct fdisk_partition *pa = NULL;
+    struct fdisk_partition *epa = NULL;
+    struct fdisk_partition *in_pa = NULL;
+    struct fdisk_partition *n_epa = NULL;
+    guint n_parts = 0;
+    gboolean on_gpt = FALSE;
+
+    msg = g_strdup_printf ("Started adding partition to '%s'", disk);
+    progress_id = bd_utils_report_started (msg);
+    g_free (msg);
+
+    cxt = get_device_context (disk, error);
+    if (!cxt) {
+        /* error is already populated */
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    npa = fdisk_new_partition ();
+    if (!npa) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to create new partition object");
+        close_context (cxt);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    sector_size = (guint64) fdisk_get_sector_size (cxt);
+
+    grain_size = (guint64) fdisk_get_grain_size (cxt);
+    if (align == BD_PART_ALIGN_NONE)
+        grain_size = sector_size;
+    else if (align == BD_PART_ALIGN_MINIMAL)
+        grain_size = (guint64) fdisk_get_minimal_iosize (cxt);
+    /* else OPTIMAL or unknown -> nothing to do */
+
+    status = fdisk_save_user_grain (cxt, grain_size);
+    if (status != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to setup alignment");
+        close_context (cxt);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    /* this is needed so that the saved grain size from above becomes
+     * effective */
+    status = fdisk_reset_device_properties (cxt);
+    if (status != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to setup alignment");
+        close_context (cxt);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    grain_size = (guint64) fdisk_get_grain_size (cxt);
+
+    /* align start up to sectors, will be aligned based on grain_size by
+     * libfdisk */
+    start = (start + sector_size - 1) / sector_size;
+
+    if (size == 0)
+        /* no size specified, set the end to default (maximum) */
+        fdisk_partition_end_follow_default (npa, 1);
+    else {
+        /* align size down */
+        size = (size / grain_size) * grain_size;
+        size = size / sector_size;
+        if (fdisk_partition_set_size (npa, size) != 0) {
+            g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                         "Failed to set partition size");
+            fdisk_unref_partition (npa);
+            close_context (cxt);
+            bd_utils_report_finished (progress_id, (*error)->message);
+            return NULL;
+        }
+    }
+
+    fdisk_partition_partno_follow_default (npa, 1);
+
+    lbl = fdisk_get_label (cxt, NULL);
+    on_gpt = g_strcmp0 (fdisk_label_get_name (lbl), "gpt") == 0;
+
+    /* GPT is easy, all partitions are the same (NORMAL) */
+    if (type == BD_PART_TYPE_REQ_NEXT && on_gpt)
+        type = BD_PART_TYPE_REQ_NORMAL;
+
+    /* on DOS we may have to decide if requested */
+    if (type == BD_PART_TYPE_REQ_NEXT) {
+        status = fdisk_get_partitions (cxt, &table);
+        if (status != 0) {
+            g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                         "Failed to get existing partitions on the device: %s", strerror_l (-status, c_locale));
+            fdisk_unref_partition (npa);
+            close_context (cxt);
+            bd_utils_report_finished (progress_id, (*error)->message);
+            return NULL;
+        }
+        iter = fdisk_new_iter (FDISK_ITER_FORWARD);
+        while (fdisk_table_next_partition(table, iter, &pa) == 0) {
+            if (fdisk_partition_is_freespace (pa))
+                continue;
+
+            if (!epa && fdisk_partition_is_container (pa))
+                epa = pa;
+
+            if (!in_pa && fdisk_partition_has_start (pa) && fdisk_partition_has_size (pa) &&
+                fdisk_partition_get_start (pa) <= start &&
+                (start < (fdisk_partition_get_start (pa) + fdisk_partition_get_size (pa))))
+                in_pa = pa;
+            n_parts++;
+        }
+
+        if (in_pa) {
+            if (epa == in_pa)
+                /* creating a parititon inside an extended partition -> LOGICAL */
+                type = BD_PART_TYPE_LOGICAL;
+            else {
+                /* trying to create a partition inside an existing one, but not
+                   an extended one -> error */
+                g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                             "Cannot create a partition inside an existing non-extended one");
+                fdisk_unref_partition (npa);
+                fdisk_free_iter (iter);
+                fdisk_unref_table (table);
+                close_context (cxt);
+                bd_utils_report_finished (progress_id, (*error)->message);
+                return NULL;
+            }
+        } else if (epa)
+            /* there's an extended partition already and we are creating a new
+               one outside of it */
+            type = BD_PART_TYPE_NORMAL;
+        else if (n_parts == 3) {
+            /* already 3 primary partitions -> create an extended partition of
+               the biggest possible size and a logical partition as requested in
+               it */
+            n_epa = fdisk_new_partition ();
+            if (!n_epa) {
+                g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                             "Failed to create new partition object");
+                fdisk_unref_partition (npa);
+                close_context (cxt);
+                bd_utils_report_finished (progress_id, (*error)->message);
+                return NULL;
+            }
+            if (fdisk_partition_set_start (n_epa, start) != 0) {
+                g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                             "Failed to set partition start");
+                fdisk_unref_partition (n_epa);
+                fdisk_unref_partition (npa);
+                fdisk_free_iter (iter);
+                fdisk_unref_table (table);
+                close_context (cxt);
+                bd_utils_report_finished (progress_id, (*error)->message);
+                return NULL;
+            }
+
+            fdisk_partition_partno_follow_default (n_epa, 1);
+
+            /* set the end to default (maximum) */
+            fdisk_partition_end_follow_default (n_epa, 1);
+
+            /* "05" for extended partition */
+            ptype = fdisk_label_parse_parttype (fdisk_get_label (cxt, NULL), "05");
+            if (fdisk_partition_set_type (n_epa, ptype) != 0) {
+                g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                             "Failed to set partition type");
+                fdisk_unref_partition (n_epa);
+                fdisk_unref_partition (npa);
+                fdisk_free_iter (iter);
+                fdisk_unref_table (table);
+                close_context (cxt);
+                bd_utils_report_finished (progress_id, (*error)->message);
+                return NULL;
+            }
+            fdisk_unref_parttype (ptype);
+
+            status = fdisk_add_partition (cxt, n_epa, NULL);
+            fdisk_unref_partition (n_epa);
+            if (status != 0) {
+                g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                             "Failed to add new partition to the table: %s", strerror_l (-status, c_locale));
+                fdisk_unref_partition (npa);
+                fdisk_free_iter (iter);
+                fdisk_unref_table (table);
+                close_context (cxt);
+                bd_utils_report_finished (progress_id, (*error)->message);
+                return NULL;
+            }
+            /* shift the start 2 MiB further as that's where the first logical
+               partition inside an extended partition can start */
+            start += (2 MiB / sector_size);
+            type = BD_PART_TYPE_LOGICAL;
+        } else
+            /* no extended partition and not 3 primary partitions -> just create
+               another primary (NORMAL) partition*/
+            type = BD_PART_TYPE_NORMAL;
+
+        fdisk_free_iter (iter);
+        fdisk_unref_table (table);
+    }
+
+    if (type == BD_PART_TYPE_REQ_EXTENDED) {
+        /* "05" for extended partition */
+        ptype = fdisk_label_parse_parttype(fdisk_get_label(cxt, NULL), "05");
+        if (fdisk_partition_set_type (npa, ptype) != 0) {
+            g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                         "Failed to set partition type");
+            fdisk_unref_partition (npa);
+            close_context (cxt);
+            bd_utils_report_finished (progress_id, (*error)->message);
+            return NULL;
+        }
+        fdisk_unref_parttype (ptype);
+    }
+
+    if (fdisk_partition_set_start (npa, start) != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to set partition start");
+        fdisk_unref_partition (npa);
+        close_context (cxt);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    status = fdisk_add_partition (cxt, npa, NULL);
+    fdisk_unref_partition (npa);
+    if (status != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to add new partition to the table: %s", strerror_l (-status, c_locale));
+        close_context (cxt);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        return NULL;
+    }
+
+    if (!write_label (cxt, disk, error)) {
+        bd_utils_report_finished (progress_id, (*error)->message);
+        close_context (cxt);
+        return NULL;
+    }
+
+    close_context (cxt);
+    bd_utils_report_finished (progress_id, "Completed");
+    return ret;
+}
