@@ -229,9 +229,9 @@ static BDBtrfsFilesystemInfo* get_filesystem_info_from_match (GMatchInfo *match_
  */
 gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, const gchar *data_level, const gchar *md_level, const BDExtraArg **extra, GError **error) {
     const gchar **device_p = NULL;
-    guint8 num_args = 0;
+    guint8 num_args = 3;        /* mkfs.btrfs, -f,..., NULL */
     const gchar **argv = NULL;
-    guint8 next_arg = 1;
+    guint8 next_arg = 0;
     gboolean success = FALSE;
 
     if (!devices || (g_strv_length ((gchar **) devices) < 1)) {
@@ -254,28 +254,23 @@ gboolean bd_btrfs_create_volume (const gchar **devices, const gchar *label, cons
     if (md_level)
         num_args += 2;
 
-    argv = g_new0 (const gchar*, num_args + 2);
-    argv[0] = "mkfs.btrfs";
+    argv = g_new0 (const gchar*, num_args);
+    argv[next_arg++] = "mkfs.btrfs";
+    argv[next_arg++] = "-f";
     if (label) {
-        argv[next_arg] = "--label";
-        next_arg++;
-        argv[next_arg] = label;
-        next_arg++;
+        argv[next_arg++] = "--label";
+        argv[next_arg++] = label;
     }
     if (data_level) {
-        argv[next_arg] = "--data";
-        next_arg++;
-        argv[next_arg] = data_level;
-        next_arg++;
+        argv[next_arg++] = "--data";
+        argv[next_arg++] = data_level;
     }
     if (md_level) {
-        argv[next_arg] = "--metadata";
-        next_arg++;
-        argv[next_arg] = md_level;
-        next_arg++;
+        argv[next_arg++] = "--metadata";
+        argv[next_arg++] = md_level;
     }
 
-    for (device_p = devices; next_arg <= num_args; device_p++, next_arg++)
+    for (device_p = devices; next_arg < num_args - 1; device_p++, next_arg++)
         argv[next_arg] = *device_p;
     argv[next_arg] = NULL;
 
