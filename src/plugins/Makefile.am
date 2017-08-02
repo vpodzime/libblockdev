@@ -163,8 +163,8 @@ endif
 if WITH_PART_FDISK
 libbd_part_fdisk_la_CFLAGS = $(GLIB_CFLAGS) $(FDISK_CFLAGS) -Wall -Wextra -Werror
 libbd_part_fdisk_la_LIBADD = -lm $(GLIB_LIBS) $(FDISK_LIBS) ${builddir}/../utils/libbd_utils.la
-libbd_part_fdisk_la_LDFLAGS = -L${srcdir}/../utils/ -version-info 2:0:0 -Wl,--no-undefined
-libbd_part_fdisk_la_CPPFLAGS = -I${builddir}/../../include/
+libbd_part_fdisk_la_LDFLAGS = -L${srcdir}/../utils/ -L${srcdir}/../../../util-linux/.libs/ -version-info 2:0:0 -Wl,--no-undefined
+libbd_part_fdisk_la_CPPFLAGS = -I${builddir}/../../include/ -I${srcdir}/../../../util-linux/libfdisk/src/
 libbd_part_fdisk_la_SOURCES = part-fdisk.c part.h
 endif
 
