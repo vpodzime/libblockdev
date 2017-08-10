@@ -283,6 +283,8 @@ gboolean bd_part_delete_part (const gchar *disk, const gchar *part, GError **err
     return TRUE;
 }
 
+static BDPartSpec* get_part_spec (struct fdisk_context *cxt, struct fdisk_partition *pa, GError **error);
+
 /**
  * bd_part_create_part:
  * @disk: disk to create partition on
@@ -540,10 +542,10 @@ BDPartSpec* bd_part_create_part (const gchar *disk, BDPartTypeReq type, guint64 
     }
 
     status = fdisk_add_partition (cxt, npa, NULL);
-    fdisk_unref_partition (npa);
     if (status != 0) {
         g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
                      "Failed to add new partition to the table: %s", strerror_l (-status, c_locale));
+        fdisk_unref_partition (npa);
         close_context (cxt);
         bd_utils_report_finished (progress_id, (*error)->message);
         return NULL;
@@ -551,11 +553,122 @@ BDPartSpec* bd_part_create_part (const gchar *disk, BDPartTypeReq type, guint64 
 
     if (!write_label (cxt, disk, error)) {
         bd_utils_report_finished (progress_id, (*error)->message);
+        fdisk_unref_partition (npa);
         close_context (cxt);
         return NULL;
     }
 
+    /* if we get NULL and error here, just propagate it further */
+    ret = get_part_spec (cxt, npa, error);
+
+    fdisk_unref_partition (npa);
     close_context (cxt);
     bd_utils_report_finished (progress_id, "Completed");
+    return ret;
+}
+
+static BDPartSpec* get_part_spec (struct fdisk_context *cxt, struct fdisk_partition *pa, GError **error) {
+    gint status = 0;
+    struct fdisk_label *lbl = NULL;
+    BDPartSpec *ret = NULL;
+    const gchar *devname = NULL;
+
+    ret = g_new0 (BDPartSpec, 1);
+
+    devname = fdisk_get_devname (cxt);
+
+    if (fdisk_partition_has_partno (pa)) {
+        if (isdigit (devname[strlen(devname) - 1]))
+            ret->path = g_strdup_printf ("%sp%lu", devname, fdisk_partition_get_partno (pa) + 1);
+        else
+            ret->path = g_strdup_printf ("%s%lu", devname, fdisk_partition_get_partno (pa) + 1);
+    }
+
+    status = fdisk_partition_to_string (pa, cxt, FDISK_FIELD_NAME, &(ret->name));
+    if (status != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to get partition name");
+        return NULL;
+    }
+
+    if (fdisk_partition_is_container (pa))
+        ret->type = BD_PART_TYPE_EXTENDED;
+    else if (fdisk_partition_is_nested (pa))
+        ret->type = BD_PART_TYPE_LOGICAL;
+    else if (fdisk_partition_is_freespace (pa))
+        ret->type = BD_PART_TYPE_FREESPACE;
+    else
+        ret->type = BD_PART_TYPE_NORMAL;
+
+    if (fdisk_partition_has_start (pa))
+        ret->start = (guint64) fdisk_partition_get_start (pa) * fdisk_get_sector_size (cxt);
+    if (fdisk_partition_has_size (pa))
+        ret->size = (guint64) fdisk_partition_get_size (pa) * fdisk_get_sector_size (cxt);
+
+    lbl = fdisk_get_label (cxt, NULL);
+    if (g_strcmp0 (fdisk_label_get_name (lbl), "gpt") == 0) {
+        status = fdisk_partition_to_string (pa, cxt, FDISK_FIELD_TYPE, &(ret->type_guid));
+        if (status != 0) {
+            g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                         "Failed to get partition type GUID");
+            return NULL;
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * bd_part_get_part_spec:
+ * @disk: disk to remove the partition from
+ * @part: partition to get spec for
+ * @error: (out): place to store error (if any)
+ *
+ * Returns: (transfer full): spec of the @part partition from @disk or %NULL in case of error
+ */
+BDPartSpec* bd_part_get_part_spec (const gchar *disk, const gchar *part, GError **error) {
+    struct fdisk_context *cxt = NULL;
+    struct fdisk_partition *pa = NULL;
+    const gchar *part_num_str = NULL;
+    gint status = 0;
+    gint part_num = 0;
+    BDPartSpec *ret = NULL;
+
+    if (!part || (part && (*part == '\0'))) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'", part);
+        return NULL;
+    }
+
+    cxt = get_device_context (disk, error);
+    if (!cxt)
+        /* error is already populated */
+        return NULL;
+
+    part_num_str = part + (strlen (part) - 1);
+    while (isdigit (*part_num_str) || (*part_num_str == '-')) {
+        part_num_str--;
+    }
+    part_num_str++;
+
+    part_num = atoi (part_num_str);
+    if (part_num == 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_INVAL,
+                     "Invalid partition path given: '%s'. Cannot extract partition number", part);
+        close_context (cxt);
+        return NULL;
+    }
+
+    status = fdisk_get_partition (cxt, part_num - 1, &pa);
+    if (status != 0) {
+        g_set_error (error, BD_PART_ERROR, BD_PART_ERROR_FAIL,
+                     "Failed to get partition for partition number: %d", part_num);
+        close_context (cxt);
+        return NULL;
+    }
+
+    ret = get_part_spec (cxt, pa, error);
+    fdisk_unref_partition (pa);
+    close_context (cxt);
     return ret;
 }
